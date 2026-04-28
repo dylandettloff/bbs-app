@@ -12,8 +12,21 @@ import {
 import axios from 'axios';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
-const API_URL = 'http://localhost:1337';
-const Stack = createNativeStackNavigator();
+const API_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_URL || 'http://localhost:1337';
+const Stack: any = createNativeStackNavigator();
+const COLORS = {
+  ink: '#12345C',
+  navy: '#004680',
+  blue: '#004680',
+  cream: '#EEF3FA',
+  paper: '#FFFFFF',
+  line: '#CCD7E6',
+  text: '#0E1726',
+  muted: '#56657C',
+  red: '#B22234',
+  white: '#FFFFFF',
+  softBlue: '#D7E7FB',
+};
 
 const http = axios.create({
   baseURL: API_URL,
@@ -53,7 +66,7 @@ function formatDate(iso: string) {
 }
 
 function getAuthToken(): string | undefined {
-  const g = (global as any).authToken as string | undefined;
+  const g = (globalThis as any).authToken as string | undefined;
   if (g) return g;
 
   const hdr = (axios.defaults.headers as any)?.common?.Authorization;
@@ -61,6 +74,10 @@ function getAuthToken(): string | undefined {
     return hdr.replace('Bearer ', '');
   }
   return undefined;
+}
+
+function getAuthHeaders(token?: string) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 function getNextEvent(events: any[]) {
@@ -132,14 +149,26 @@ function absolutizeUrl(url: string) {
 /** ---------- UI helpers ---------- */
 
 function SafeAreaContainer({ children }: { children: React.ReactNode }) {
-  return <View style={{ flex: 1, paddingTop: 8 }}>{children}</View>;
+  return (
+    <View style={{ flex: 1, paddingTop: 8, backgroundColor: COLORS.cream }}>
+      {children}
+    </View>
+  );
 }
 
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
-    <View style={{ borderWidth: 1, borderRadius: 12, padding: 12 }}>
-      <Text style={{ fontWeight: '700' }}>{label}</Text>
-      <Text style={{ marginTop: 4 }}>{value}</Text>
+    <View
+      style={{
+        borderWidth: 1,
+        borderColor: COLORS.line,
+        backgroundColor: COLORS.paper,
+        borderRadius: 16,
+        padding: 14,
+      }}
+    >
+      <Text style={{ fontWeight: '800', color: COLORS.ink }}>{label}</Text>
+      <Text style={{ marginTop: 4, color: COLORS.text }}>{value}</Text>
     </View>
   );
 }
@@ -148,16 +177,13 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 
 function CounselorHomeScreen({ navigation }: any) {
   const token = getAuthToken();
-  const headers = useMemo(
-    () => (token ? { Authorization: `Bearer ${token}` } : {}),
-    [token]
-  );
+  const headers = useMemo(() => getAuthHeaders(token), [token]);
 
   const [loading, setLoading] = useState(false);
   const [counties, setCounties] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const staffEvents = (global as any).staffEvents ?? [];
+  const staffEvents = (globalThis as any).staffEvents ?? [];
   const nextEvent = useMemo(() => getNextEvent(staffEvents), [staffEvents]);
 
   useEffect(() => {
@@ -186,12 +212,12 @@ function CounselorHomeScreen({ navigation }: any) {
     return () => {
       mounted = false;
     };
-  }, [token, headers]);
+  }, [token]);
 
   if (!token) {
     return (
-      <View style={{ flex: 1, padding: 16 }}>
-        <Text style={{ fontSize: 16 }}>
+      <View style={{ flex: 1, padding: 16, backgroundColor: COLORS.cream }}>
+        <Text style={{ fontSize: 16, color: COLORS.text }}>
           Not signed in. Go back and sign in on the Counselor tab.
         </Text>
       </View>
@@ -201,8 +227,19 @@ function CounselorHomeScreen({ navigation }: any) {
   return (
     <SafeAreaContainer>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <View style={{ borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 12 }}>
-          <Text style={{ fontWeight: '700', marginBottom: 6 }}>Next Staff Event</Text>
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: COLORS.line,
+            backgroundColor: COLORS.paper,
+            borderRadius: 20,
+            padding: 16,
+            marginBottom: 14,
+          }}
+        >
+          <Text style={{ fontWeight: '800', marginBottom: 8, color: COLORS.ink }}>
+            Next Staff Event
+          </Text>
 
           <Pressable
             onPress={() => navigation.navigate('StaffSchedule')}
@@ -210,21 +247,21 @@ function CounselorHomeScreen({ navigation }: any) {
           >
             {nextEvent ? (
               <>
-                <Text style={{ fontSize: 16, fontWeight: '700' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
                   {nextEvent.title || 'Untitled event'}
                 </Text>
-                <Text style={{ marginTop: 4, color: '#6b7280' }}>
+                <Text style={{ marginTop: 4, color: COLORS.muted }}>
                   {formatDate(nextEvent.starts_at)}
                   {nextEvent.location ? ` • ${nextEvent.location}` : ''}
                 </Text>
-                <Text style={{ marginTop: 8, color: '#2563eb', fontWeight: '700' }}>
+                <Text style={{ marginTop: 8, color: COLORS.blue, fontWeight: '800' }}>
                   Open full schedule →
                 </Text>
               </>
             ) : (
               <>
-                <Text style={{ color: '#6b7280' }}>No upcoming staff events.</Text>
-                <Text style={{ marginTop: 8, color: '#2563eb', fontWeight: '700' }}>
+                <Text style={{ color: COLORS.muted }}>No upcoming staff events.</Text>
+                <Text style={{ marginTop: 8, color: COLORS.blue, fontWeight: '800' }}>
                   Open full schedule →
                 </Text>
               </>
@@ -232,8 +269,18 @@ function CounselorHomeScreen({ navigation }: any) {
           </Pressable>
         </View>
 
-        <View style={{ borderWidth: 1, borderRadius: 12, padding: 12 }}>
-          <Text style={{ fontWeight: '700', marginBottom: 6 }}>My Counties</Text>
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: COLORS.line,
+            backgroundColor: COLORS.paper,
+            borderRadius: 20,
+            padding: 16,
+          }}
+        >
+          <Text style={{ fontWeight: '800', marginBottom: 8, color: COLORS.ink }}>
+            My Counties
+          </Text>
 
           {loading ? (
             <View style={{ paddingVertical: 10 }}>
@@ -241,10 +288,10 @@ function CounselorHomeScreen({ navigation }: any) {
             </View>
           ) : null}
 
-          {error ? <Text style={{ color: 'red', marginTop: 6 }}>{error}</Text> : null}
+          {error ? <Text style={{ color: COLORS.red, marginTop: 6 }}>{error}</Text> : null}
 
           {!loading && counties.length === 0 ? (
-            <Text style={{ color: '#6b7280' }}>No counties assigned to this user.</Text>
+            <Text style={{ color: COLORS.muted }}>No counties assigned to this user.</Text>
           ) : (
             counties.map((c: any) => {
               const countyName =
@@ -252,14 +299,27 @@ function CounselorHomeScreen({ navigation }: any) {
                 pickField(c?.county, 'name') ||
                 `County #${c?.id}`;
               const countyId = c?.id ?? c?.county?.id ?? null;
+              const countyDocumentId = c?.documentId ?? c?.county?.documentId ?? null;
 
               return (
                 <Pressable
                   key={String(countyId ?? countyName)}
-                  onPress={() => navigation.navigate('County', { countyId, countyName })}
-                  style={{ paddingVertical: 10 }}
+                  onPress={() =>
+                    navigation.navigate('County', {
+                      countyId,
+                      countyDocumentId,
+                      countyName,
+                    })
+                  }
+                  style={{
+                    paddingVertical: 12,
+                    borderTopWidth: 1,
+                    borderTopColor: COLORS.line,
+                  }}
                 >
-                  <Text style={{ fontSize: 16 }}>• {countyName}</Text>
+                  <Text style={{ fontSize: 16, color: COLORS.text, fontWeight: '700' }}>
+                    {countyName}
+                  </Text>
                 </Pressable>
               );
             })
@@ -271,10 +331,10 @@ function CounselorHomeScreen({ navigation }: any) {
 }
 
 function CountyScreen({ route, navigation }: any) {
-  const { countyName } = route.params;
+  const { countyId, countyDocumentId, countyName } = route.params;
 
   const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => getAuthHeaders(token), [token]);
 
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<any[]>([]);
@@ -284,24 +344,52 @@ function CountyScreen({ route, navigation }: any) {
     let mounted = true;
 
     async function loadCountyCities() {
+      if (!token) return;
       setError(null);
       setLoading(true);
 
       try {
-        const res = await http.get('/api/counties', {
-          headers,
-          params: {
-            status: 'published',
-            'filters[name][$eq]': countyName,
-            'pagination[pageSize]': 1,
-            'populate[cities]': true,
-          },
-        });
+        let list: any[] = [];
 
-        const first = res.data?.data?.[0];
-        if (!first) throw new Error(`County "${countyName}" not found.`);
+        if (countyDocumentId) {
+          const resDoc = await http.get('/api/cities', {
+            headers,
+            params: {
+              status: 'published',
+              sort: 'name:asc',
+              'pagination[pageSize]': 500,
+              'filters[county][documentId][$eq]': countyDocumentId,
+            },
+          });
+          list = safeStrapiList(resDoc.data);
+        }
 
-        const list = relList(first?.cities ?? first?.attributes?.cities);
+        if (list.length === 0 && countyId != null) {
+          const resId = await http.get('/api/cities', {
+            headers,
+            params: {
+              status: 'published',
+              sort: 'name:asc',
+              'pagination[pageSize]': 500,
+              'filters[county][id][$eq]': countyId,
+            },
+          });
+          list = safeStrapiList(resId.data);
+        }
+
+        if (list.length === 0 && countyName) {
+          const resName = await http.get('/api/cities', {
+            headers,
+            params: {
+              status: 'published',
+              sort: 'name:asc',
+              'pagination[pageSize]': 500,
+              'filters[county][name][$eq]': countyName,
+            },
+          });
+          list = safeStrapiList(resName.data);
+        }
+
         if (mounted) setCities(list);
       } catch (e: any) {
         if (mounted) {
@@ -317,12 +405,12 @@ function CountyScreen({ route, navigation }: any) {
     return () => {
       mounted = false;
     };
-  }, [countyName, headers]);
+  }, [countyId, countyDocumentId, countyName, token]);
 
   return (
     <SafeAreaContainer>
       <View style={{ padding: 16, flex: 1 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>{countyName}</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.ink }}>{countyName}</Text>
 
         {loading ? (
           <View style={{ paddingVertical: 16 }}>
@@ -330,10 +418,10 @@ function CountyScreen({ route, navigation }: any) {
           </View>
         ) : null}
 
-        {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
+        {error ? <Text style={{ color: COLORS.red }}>{error}</Text> : null}
 
         {!loading && cities.length === 0 ? (
-          <Text style={{ marginTop: 12, color: '#6b7280' }}>
+          <Text style={{ marginTop: 12, color: COLORS.muted }}>
             No cities found for this county yet.
           </Text>
         ) : (
@@ -357,12 +445,16 @@ function CountyScreen({ route, navigation }: any) {
                   }
                   style={{
                     borderWidth: 1,
-                    borderRadius: 12,
-                    padding: 12,
+                    borderColor: COLORS.line,
+                    backgroundColor: COLORS.paper,
+                    borderRadius: 16,
+                    padding: 14,
                     marginBottom: 10,
                   }}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: '700' }}>{cityNameLocal}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
+                    {cityNameLocal}
+                  </Text>
                 </Pressable>
               );
             }}
@@ -377,7 +469,7 @@ function CityScreen({ route, navigation }: any) {
   const { cityId, cityDocumentId, cityName } = route.params;
 
   const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => getAuthHeaders(token), [token]);
 
   const [loading, setLoading] = useState(false);
   const [students, setStudents] = useState<any[]>([]);
@@ -387,51 +479,38 @@ function CityScreen({ route, navigation }: any) {
     let mounted = true;
 
     async function loadStudentsFromCity() {
+      if (!token) return;
       setError(null);
       setLoading(true);
 
       try {
-        // Match your Strapi behavior:
-        // - list query filtered by documentId or id
-        // - populate students and their photo
         const paramsByDocId = {
           status: 'published',
-          'pagination[pageSize]': 1,
-          'populate[students]': true,
-          'populate[students][populate][photo]': true,
-          ...(cityDocumentId ? { 'filters[documentId][$eq]': cityDocumentId } : {}),
+          sort: 'Name:asc',
+          'pagination[pageSize]': 500,
+          populate: 'photo',
+          ...(cityDocumentId ? { 'filters[city][documentId][$eq]': cityDocumentId } : {}),
         };
 
         const paramsById = {
           status: 'published',
-          'pagination[pageSize]': 1,
-          'populate[students]': true,
-          'populate[students][populate][photo]': true,
-          ...(cityId != null ? { 'filters[id][$eq]': cityId } : {}),
+          sort: 'Name:asc',
+          'pagination[pageSize]': 500,
+          populate: 'photo',
+          ...(cityId != null ? { 'filters[city][id][$eq]': cityId } : {}),
         };
 
-        let first: any = null;
+        let list: any[] = [];
 
-        // Try documentId first
         if (cityDocumentId) {
-          const resDoc = await http.get('/api/cities', { headers, params: paramsByDocId });
-          first = resDoc.data?.data?.[0] ?? null;
+          const resDoc = await http.get('/api/students', { headers, params: paramsByDocId });
+          list = safeStrapiList(resDoc.data);
         }
 
-        // Fallback to id if needed
-        if (!first && cityId != null) {
-          const resId = await http.get('/api/cities', { headers, params: paramsById });
-          first = resId.data?.data?.[0] ?? null;
+        if (list.length === 0 && cityId != null) {
+          const resId = await http.get('/api/students', { headers, params: paramsById });
+          list = safeStrapiList(resId.data);
         }
-
-        if (!first) {
-          throw new Error(
-            `City not found. id=${String(cityId)} documentId=${String(cityDocumentId)}`
-          );
-        }
-
-        const rel = first?.students ?? first?.attributes?.students;
-        const list = relList(rel);
 
         const sorted = [...list].sort((a, b) =>
           studentDisplayName(a).localeCompare(studentDisplayName(b))
@@ -453,12 +532,12 @@ function CityScreen({ route, navigation }: any) {
       mounted = false;
     };
     // include both params so navigating between cities updates correctly
-  }, [cityId, cityDocumentId, headers]);
+  }, [cityId, cityDocumentId, token]);
 
   return (
     <SafeAreaContainer>
       <View style={{ padding: 16, flex: 1 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>{cityName}</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.ink }}>{cityName}</Text>
 
         {loading ? (
           <View style={{ paddingVertical: 16 }}>
@@ -466,10 +545,10 @@ function CityScreen({ route, navigation }: any) {
           </View>
         ) : null}
 
-        {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
+        {error ? <Text style={{ color: COLORS.red }}>{error}</Text> : null}
 
         {!loading && students.length === 0 ? (
-          <Text style={{ marginTop: 12, color: '#6b7280' }}>
+          <Text style={{ marginTop: 12, color: COLORS.muted }}>
             No students found for this city yet.
           </Text>
         ) : (
@@ -491,7 +570,9 @@ function CityScreen({ route, navigation }: any) {
                   }
                   style={{
                     borderWidth: 1,
-                    borderRadius: 12,
+                    borderColor: COLORS.line,
+                    backgroundColor: COLORS.paper,
+                    borderRadius: 16,
                     padding: 12,
                     marginBottom: 10,
                     flexDirection: 'row',
@@ -510,27 +591,29 @@ function CityScreen({ route, navigation }: any) {
                         width: 44,
                         height: 44,
                         borderRadius: 22,
-                        backgroundColor: '#e5e7eb',
+                        backgroundColor: COLORS.softBlue,
                         alignItems: 'center',
                         justifyContent: 'center',
                       }}
                     >
-                      <Text style={{ fontWeight: '700', color: '#374151' }}>
+                      <Text style={{ fontWeight: '800', color: COLORS.navy }}>
                         {name?.[0]?.toUpperCase?.() ?? 'S'}
                       </Text>
                     </View>
                   )}
 
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 16, fontWeight: '700' }}>{name}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
+                      {name}
+                    </Text>
                     {pickField(item, 'hometown') ? (
-                      <Text style={{ marginTop: 2, color: '#6b7280' }}>
+                      <Text style={{ marginTop: 2, color: COLORS.muted }}>
                         {String(pickField(item, 'hometown'))}
                       </Text>
                     ) : null}
                   </View>
 
-                  <Text style={{ color: '#2563eb', fontWeight: '700' }}>View →</Text>
+                  <Text style={{ color: COLORS.blue, fontWeight: '800' }}>View →</Text>
                 </Pressable>
               );
             }}
@@ -557,12 +640,12 @@ function StudentScreen({ route }: any) {
   return (
     <SafeAreaContainer>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: '700' }}>{String(Name)}</Text>
+        <Text style={{ fontSize: 24, fontWeight: '800', color: COLORS.ink }}>{String(Name)}</Text>
 
         {photoUrl ? (
           <Image
             source={{ uri: photoUrl }}
-            style={{ width: 140, height: 140, borderRadius: 16, marginTop: 12 }}
+            style={{ width: 140, height: 140, borderRadius: 18, marginTop: 12 }}
           />
         ) : null}
 
@@ -577,9 +660,19 @@ function StudentScreen({ route }: any) {
             <InfoRow label="Early Departure" value={formatDate(String(earlyDeparture))} />
           ) : null}
 
-          <View style={{ borderWidth: 1, borderRadius: 12, padding: 12 }}>
-            <Text style={{ fontWeight: '700' }}>Medical Info</Text>
-            <Text style={{ marginTop: 6 }}>{medical_info ? String(medical_info) : '—'}</Text>
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: COLORS.line,
+              borderRadius: 16,
+              padding: 14,
+              backgroundColor: COLORS.paper,
+            }}
+          >
+            <Text style={{ fontWeight: '800', color: COLORS.ink }}>Medical Info</Text>
+            <Text style={{ marginTop: 6, color: COLORS.text }}>
+              {medical_info ? String(medical_info) : '—'}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -589,7 +682,7 @@ function StudentScreen({ route }: any) {
 
 function StaffScheduleScreen({ navigation }: any) {
   const token = getAuthToken();
-  const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  const headers = useMemo(() => getAuthHeaders(token), [token]);
 
   const [loading, setLoading] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
@@ -621,7 +714,7 @@ function StaffScheduleScreen({ navigation }: any) {
           return (Number.isNaN(da) ? 0 : da) - (Number.isNaN(db) ? 0 : db);
         });
 
-        (global as any).staffEvents = sorted;
+        (globalThis as any).staffEvents = sorted;
         if (mounted) setEvents(sorted);
       } catch (e: any) {
         if (mounted) {
@@ -642,7 +735,7 @@ function StaffScheduleScreen({ navigation }: any) {
   return (
     <SafeAreaContainer>
       <View style={{ padding: 16, flex: 1 }}>
-        <Text style={{ fontSize: 20, fontWeight: '700' }}>Staff Schedule</Text>
+        <Text style={{ fontSize: 22, fontWeight: '800', color: COLORS.ink }}>Staff Schedule</Text>
 
         {loading ? (
           <View style={{ paddingVertical: 16 }}>
@@ -650,10 +743,10 @@ function StaffScheduleScreen({ navigation }: any) {
           </View>
         ) : null}
 
-        {error ? <Text style={{ color: 'red' }}>{error}</Text> : null}
+        {error ? <Text style={{ color: COLORS.red }}>{error}</Text> : null}
 
         {!loading && events.length === 0 ? (
-          <Text style={{ marginTop: 12, color: '#6b7280' }}>No events found.</Text>
+          <Text style={{ marginTop: 12, color: COLORS.muted }}>No events found.</Text>
         ) : (
           <FlatList
             style={{ marginTop: 12 }}
@@ -671,18 +764,22 @@ function StaffScheduleScreen({ navigation }: any) {
                   onPress={() => navigation.navigate('StaffEventDetail', { event: item })}
                   style={{
                     borderWidth: 1,
-                    borderRadius: 12,
-                    padding: 12,
+                    borderColor: COLORS.line,
+                    backgroundColor: COLORS.paper,
+                    borderRadius: 16,
+                    padding: 14,
                     marginBottom: 10,
                   }}
                 >
-                  <Text style={{ fontSize: 16, fontWeight: '700' }}>{title}</Text>
-                  <Text style={{ marginTop: 4, color: '#6b7280' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '800', color: COLORS.text }}>
+                    {title}
+                  </Text>
+                  <Text style={{ marginTop: 4, color: COLORS.muted }}>
                     {starts ? formatDate(starts) : 'Invalid date'}
                     {ends ? ` → ${formatDate(ends)}` : ''}
                     {location ? ` • ${location}` : ''}
                   </Text>
-                  <Text style={{ marginTop: 8, color: staffOnly ? '#ef4444' : '#6b7280' }}>
+                  <Text style={{ marginTop: 8, color: staffOnly ? COLORS.red : COLORS.muted }}>
                     {staffOnly ? 'Staff-only' : 'Public'}
                   </Text>
                 </Pressable>
@@ -708,7 +805,7 @@ function StaffEventDetailScreen({ route }: any) {
   return (
     <SafeAreaContainer>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={{ fontSize: 22, fontWeight: '700' }}>{title}</Text>
+        <Text style={{ fontSize: 24, fontWeight: '800', color: COLORS.ink }}>{title}</Text>
 
         <View style={{ marginTop: 12, gap: 8 }}>
           {starts ? <InfoRow label="Starts" value={formatDate(starts)} /> : null}
@@ -718,8 +815,8 @@ function StaffEventDetailScreen({ route }: any) {
         </View>
 
         <View style={{ marginTop: 16 }}>
-          <Text style={{ fontWeight: '700', marginBottom: 6 }}>Description</Text>
-          <Text style={{ color: '#111827' }}>
+          <Text style={{ fontWeight: '800', marginBottom: 6, color: COLORS.ink }}>Description</Text>
+          <Text style={{ color: COLORS.text }}>
             {description ? JSON.stringify(description, null, 2) : 'No description'}
           </Text>
         </View>
@@ -732,7 +829,20 @@ function StaffEventDetailScreen({ route }: any) {
 
 export default function CounselorStack() {
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: {
+          backgroundColor: COLORS.blue,
+        },
+        headerTintColor: COLORS.white,
+        headerTitleStyle: {
+          fontWeight: '800',
+        },
+        contentStyle: {
+          backgroundColor: COLORS.cream,
+        },
+      }}
+    >
       <Stack.Screen
         name="CounselorHome"
         component={CounselorHomeScreen}

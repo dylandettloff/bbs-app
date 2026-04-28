@@ -6,10 +6,10 @@ module.exports = async (ctx, next) => {
 
   const countyId = ctx.params.id;
   const county = await strapi.entityService.findOne('api::county.county', countyId, {
-    populate: ['counselors'],
+    populate: ['users_permissions_users'],
   });
 
-  const allowed = county?.counselors?.some(u => u.id === user.id);
+  const allowed = county?.users_permissions_users?.some((u) => u.id === user.id);
   if (!allowed) return ctx.forbidden('Not allowed to view this county');
 
   return next();

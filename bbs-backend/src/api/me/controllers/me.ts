@@ -17,11 +17,47 @@ export default {
     if (!user) return ctx.unauthorized();
 
     const counties = await strapi.entityService.findMany("api::county.county", {
-      filters: ({ users_permissions_users: { id: { $eq: user.id } } } as any),
-      populate: {
-        cities: {
-          populate: {
-            students: true,
+      filters: {
+        users_permissions_users: {
+          id: {
+            $eq: user.id,
+          },
+        },
+      },
+      sort: { name: "asc" },
+    });
+
+    ctx.body = { data: counties ?? [] };
+  },
+
+  async cityAccess(ctx: any) {
+    const user = ctx.state.user;
+    if (!user) return ctx.unauthorized();
+
+    const userWithCities = (await strapi.entityService.findOne(
+      "plugin::users-permissions.user",
+      user.id,
+      {
+        populate: {
+          cities: {
+            sort: { name: "asc" },
+          },
+        },
+      }
+    )) as any;
+
+    ctx.body = { data: userWithCities?.cities ?? [] };
+  },
+
+  async counties(ctx: any) {
+    const user = ctx.state.user;
+    if (!user) return ctx.unauthorized();
+
+    const counties = await strapi.entityService.findMany("api::county.county", {
+      filters: {
+        users_permissions_users: {
+          id: {
+            $eq: user.id,
           },
         },
       },

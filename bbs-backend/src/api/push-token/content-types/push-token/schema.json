@@ -1,0 +1,27 @@
+{
+  "kind": "collectionType",
+  "collectionName": "push_tokens",
+  "info": {
+    "singularName": "push-token",
+    "pluralName": "push-tokens",
+    "displayName": "Push Token"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "token": {
+      "type": "string",
+      "required": true,
+      "unique": true
+    },
+    "platform": {
+      "type": "string"
+    },
+    "enabled": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}
