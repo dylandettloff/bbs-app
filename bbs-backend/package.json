@@ -12,6 +12,7 @@
     "develop": "node ./node_modules/@strapi/strapi/bin/strapi.js develop",
     "prestart": "npm run build",
     "start": "NODE_ENV=production node ./node_modules/@strapi/strapi/bin/strapi.js start",
+    "start:prod": "NODE_ENV=production node ./node_modules/@strapi/strapi/bin/strapi.js start",
     "strapi": "node ./node_modules/@strapi/strapi/bin/strapi.js",
     "upgrade": "npx @strapi/upgrade latest",
     "upgrade:dry": "npx @strapi/upgrade latest --dry"
@@ -21,6 +22,7 @@
     "@strapi/plugin-users-permissions": "5.35.0",
     "@strapi/strapi": "5.35.0",
     "better-sqlite3": "11.3.0",
+    "pg": "^8.21.0",
     "react": "^18.0.0",
     "react-dom": "^18.0.0",
     "react-router-dom": "^6.0.0",
@@ -30,7 +32,11 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "esbuild": "^0.27.3",
     "typescript": "^5"
+  },
+  "overrides": {
+    "@strapi/admin": "5.35.0"
   },
   "engines": {
     "node": ">=18.0.0 <=22.x.x",
