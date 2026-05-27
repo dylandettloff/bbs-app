@@ -79,7 +79,7 @@ android {
 
     namespace "com.bbsfrontend"
     defaultConfig {
-        applicationId "com.bbsfrontend"
+        applicationId "org.badgerboysstate.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

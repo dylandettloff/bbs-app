@@ -1,4 +1,21 @@
 {
   "name": "bbsFrontend",
-  "displayName": "bbsFrontend"
+  "displayName": "Badger Boys State",
+  "expo": {
+    "name": "Badger Boys State",
+    "slug": "badger-boys-state",
+    "version": "1.0.0",
+    "orientation": "default",
+    "ios": {
+      "bundleIdentifier": "org.badgerboysstate.app",
+      "buildNumber": "1"
+    },
+    "android": {
+      "package": "org.badgerboysstate.app",
+      "versionCode": 1
+    },
+    "extra": {
+      "apiUrl": "https://bbs-backend-713848127304.us-central1.run.app"
+    }
+  }
 }
