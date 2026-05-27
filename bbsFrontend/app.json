@@ -11,11 +11,13 @@
       "buildNumber": "1"
     },
     "android": {
-      "package": "org.badgerboysstate.app",
-      "versionCode": 1
+      "package": "org.badgerboysstate.app"
     },
     "extra": {
-      "apiUrl": "https://bbs-backend-713848127304.us-central1.run.app"
+      "apiUrl": "https://bbs-backend-713848127304.us-central1.run.app",
+      "eas": {
+        "projectId": "c8aadf84-b565-4fed-b5c1-e6c752978910"
+      }
     }
   }
 }
