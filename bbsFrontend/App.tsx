@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 import axios from 'axios';
+import { Asset } from 'expo-asset';
+import * as Sharing from 'expo-sharing';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import CounselorStack from './src/navigation/CounselorStack';
@@ -20,6 +22,7 @@ const API_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_URL || 'http:
 const MANUAL_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_CITIZEN_MANUAL_URL || null;
 const Tab: any = createBottomTabNavigator();
 const BRAND_LOGO = require('./assets/badger_boys_state_inc_logo.jpeg');
+const CITIZEN_MANUAL_PDF = require('./assets/citizens-manual-2026.pdf');
 
 const COLORS = {
   ink: '#12345C',
@@ -807,7 +810,7 @@ function ManualScreen() {
   const [loading, setLoading] = useState(false);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [manualTitle, setManualTitle] = useState('Citizen Manual');
+  const [manualTitle, setManualTitle] = useState("2026 Citizen's Manual");
   const [manualSummary, setManualSummary] = useState<string | null>(null);
   const [manualUrl, setManualUrl] = useState<string | null>(MANUAL_URL);
 
@@ -841,15 +844,18 @@ function ManualScreen() {
       setManualUrl(pdfUrl);
 
       if (!pdfUrl) {
-        setAvailable(false);
-        setError('Upload a PDF to the Strapi Media Library.');
+        setManualTitle("2026 Citizen's Manual");
+        setManualSummary(null);
+        setAvailable(true);
         return;
       }
 
       setAvailable(true);
     } catch (e: any) {
-      setAvailable(false);
-      setError(e?.response?.data?.error?.message || 'Citizen manual PDF was not found yet.');
+      setManualTitle("2026 Citizen's Manual");
+      setManualSummary(null);
+      setManualUrl(null);
+      setAvailable(true);
     } finally {
       setLoading(false);
     }
@@ -864,12 +870,25 @@ function ManualScreen() {
     setError(null);
 
     try {
-      if (!manualUrl) {
-        setError('No citizen manual PDF is available yet.');
+      if (manualUrl) {
+        await Linking.openURL(manualUrl);
         return;
       }
 
-      await Linking.openURL(manualUrl);
+      const asset = Asset.fromModule(CITIZEN_MANUAL_PDF);
+      await asset.downloadAsync();
+      const uri = asset.localUri || asset.uri;
+
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, {
+          dialogTitle: "Open 2026 Citizen's Manual",
+          mimeType: 'application/pdf',
+          UTI: 'com.adobe.pdf',
+        });
+        return;
+      }
+
+      await Linking.openURL(uri);
     } catch (e: any) {
       setError(e?.message || 'Unable to open the citizen manual.');
     }
@@ -880,7 +899,7 @@ function ManualScreen() {
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
         <SectionCard title="Citizen Manual" eyebrow="Reference">
           <Text style={{ color: COLORS.text, lineHeight: 22 }}>
-            This tab opens the current Badger Boys State citizen manual as a PDF from Strapi.
+            Open the official 2026 Badger Boys State citizen manual as a PDF.
           </Text>
           <Text style={{ marginTop: 12, color: COLORS.ink, fontWeight: '800', fontSize: 18 }}>
             {manualTitle}
@@ -888,24 +907,9 @@ function ManualScreen() {
           {manualSummary ? (
             <Text style={{ marginTop: 8, color: COLORS.text, lineHeight: 21 }}>{manualSummary}</Text>
           ) : null}
-          <Text
-            style={{
-              marginTop: 12,
-              color: COLORS.muted,
-              lineHeight: 20,
-              fontSize: 13,
-            }}
-          >
-            Source: {manualUrl || '/api/manual-file'}
-          </Text>
 
           <View style={{ marginTop: 16, gap: 10 }}>
             <ActionButton label="Open Manual PDF" onPress={openManual} />
-            <ActionButton
-              label={loading ? 'Checking…' : 'Refresh Manual'}
-              onPress={checkManual}
-              inverse
-            />
           </View>
 
           {loading ? (
@@ -925,29 +929,6 @@ function ManualScreen() {
               {error || 'Citizen manual PDF was not found yet.'}
             </Text>
           ) : null}
-        </SectionCard>
-
-        <SectionCard title="Upload Path">
-          <Text style={{ color: COLORS.text, lineHeight: 22 }}>
-            Upload the PDF in Strapi using the
-            {' '}
-            Media Library
-            {' '}
-            . The app will use the newest PDF whose file name includes
-            {' '}
-            `manual`
-            {' '}
-            or
-            {' '}
-            `citizen`.
-          </Text>
-          <Text style={{ marginTop: 10, color: COLORS.muted, lineHeight: 20 }}>
-            If you want to override Strapi later, you can still set
-            {' '}
-            `EXPO_PUBLIC_CITIZEN_MANUAL_URL`
-            {' '}
-            when starting or building the app.
-          </Text>
         </SectionCard>
       </ScrollView>
     </ScreenFrame>
