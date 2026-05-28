@@ -11,15 +11,6 @@
   },
   "pluginOptions": {},
   "attributes": {
-    "Name": {
-      "type": "string"
-    },
-    "hometown": {
-      "type": "string"
-    },
-    "highschool": {
-      "type": "string"
-    },
     "id_number": {
       "type": "integer"
     },
@@ -30,19 +21,6 @@
         "Nationalist",
         "Independent"
       ]
-    },
-    "medical_info": {
-      "type": "richtext"
-    },
-    "photo": {
-      "type": "media",
-      "multiple": false,
-      "allowedTypes": [
-        "images"
-      ]
-    },
-    "earlyDeparture": {
-      "type": "datetime"
     },
     "city": {
       "type": "relation",
