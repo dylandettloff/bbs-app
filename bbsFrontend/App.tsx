@@ -9,23 +9,17 @@ import {
   ScrollView,
   StatusBar,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import axios from 'axios';
-import { Asset } from 'expo-asset';
 import * as Device from 'expo-device';
 import * as Notifications from 'expo-notifications';
-import * as Sharing from 'expo-sharing';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import CounselorStack from './src/navigation/CounselorStack';
 
 const API_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_URL || 'http://localhost:1337';
-const MANUAL_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_CITIZEN_MANUAL_URL || null;
 const Tab: any = createBottomTabNavigator();
 const BRAND_LOGO = require('./assets/badger_boys_state_inc_logo.jpeg');
-const CITIZEN_MANUAL_PDF = require('./assets/citizens-manual-2026.pdf');
 const EAS_PROJECT_ID = 'c8aadf84-b565-4fed-b5c1-e6c752978910';
 
 Notifications.setNotificationHandler({
@@ -398,7 +392,7 @@ function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [nextEvent, setNextEvent] = useState<any | null>(null);
   const [topPress, setTopPress] = useState<any | null>(null);
-  const [latestAnnouncement, setLatestAnnouncement] = useState<any | null>(null);
+  const [pinnedContent, setPinnedContent] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadHome = async () => {
@@ -406,7 +400,7 @@ function HomeScreen() {
     setLoading(true);
 
     try {
-      const [eventsRes, pressRes, announcementsRes] = await Promise.all([
+      const [eventsRes, pressRes, pinnedRes] = await Promise.all([
         api.get('/api/events', {
           params: {
             sort: 'starts_at:asc',
@@ -420,12 +414,7 @@ function HomeScreen() {
             populate: 'image',
           },
         }),
-        api.get('/api/announcments', {
-          params: {
-            sort: 'publishedAt:desc',
-            'pagination[pageSize]': 1,
-          },
-        }),
+        api.get('/api/pinned-content'),
       ]);
 
       const allEvents = safeList(eventsRes.data);
@@ -439,10 +428,10 @@ function HomeScreen() {
         .map((item) => item.event);
 
       const presses = safeList(pressRes.data);
-      const announcements = safeList(announcementsRes.data);
+      const pinned = pinnedRes.data?.data ?? null;
       setNextEvent(upcoming[0] ?? null);
       setTopPress(presses[0] ?? null);
-      setLatestAnnouncement(announcements[0] ?? null);
+      setPinnedContent(pick(pinned, 'active') === false ? null : pinned);
     } catch (e: any) {
       setError(e?.response?.data?.error?.message || e.message);
     } finally {
@@ -457,9 +446,9 @@ function HomeScreen() {
 
   const pressImages = topPress ? getPressImageUrls(topPress) : [];
   const pressBody = topPress ? richTextToPlain(pick(topPress, 'body')) : '';
-  const announcementBody = latestAnnouncement
-    ? richTextToPlain(pick(latestAnnouncement, 'body'))
-    : '';
+  const pinnedBody = pinnedContent ? richTextToPlain(pick(pinnedContent, 'body')) : '';
+  const pinnedButtonLabel = pinnedContent ? pick(pinnedContent, 'buttonLabel') : null;
+  const pinnedButtonUrl = pinnedContent ? pick(pinnedContent, 'buttonUrl') : null;
 
   return (
     <ScreenFrame>
@@ -478,29 +467,25 @@ function HomeScreen() {
             <Text style={{ marginBottom: 12, color: COLORS.red, fontWeight: '700' }}>{error}</Text>
           ) : null}
 
-          <SectionCard title="Latest Announcement" eyebrow="Important">
-            {latestAnnouncement ? (
+          {pinnedContent ? (
+            <SectionCard title={pick(pinnedContent, 'title') || 'Pinned Update'} eyebrow="Pinned">
               <>
-                <Text style={{ color: COLORS.text, fontSize: 19, fontWeight: '900', lineHeight: 24 }}>
-                  {pick(latestAnnouncement, 'title') || 'Announcement'}
-                </Text>
-                {pick(latestAnnouncement, 'publishedAt') ? (
-                  <Text style={{ marginTop: 6, color: COLORS.muted }}>
-                    {formatDate(pick(latestAnnouncement, 'publishedAt'))}
+                {pinnedBody ? (
+                  <Text style={{ marginTop: 12, color: COLORS.text, lineHeight: 22 }}>
+                    {pinnedBody}
                   </Text>
                 ) : null}
-                {announcementBody ? (
-                  <Text style={{ marginTop: 12, color: COLORS.text, lineHeight: 22 }}>
-                    {announcementBody.length > 240
-                      ? `${announcementBody.slice(0, 240).trim()}...`
-                      : announcementBody}
-                  </Text>
+                {pinnedButtonLabel && pinnedButtonUrl ? (
+                  <View style={{ marginTop: 16 }}>
+                    <ActionButton
+                      label={String(pinnedButtonLabel)}
+                      onPress={() => Linking.openURL(String(pinnedButtonUrl))}
+                    />
+                  </View>
                 ) : null}
               </>
-            ) : (
-              <Text style={{ color: COLORS.muted }}>No announcements posted yet.</Text>
-            )}
-          </SectionCard>
+            </SectionCard>
+          ) : null}
 
           <SectionCard title="Next Schedule Item">
             {nextEvent ? (
@@ -892,110 +877,47 @@ function PressScreen() {
   );
 }
 
-function ManualScreen() {
+function FilesScreen() {
   const [loading, setLoading] = useState(false);
-  const [available, setAvailable] = useState<boolean | null>(null);
+  const [files, setFiles] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [manualTitle, setManualTitle] = useState("2026 Citizen's Manual");
-  const [manualSummary, setManualSummary] = useState<string | null>(null);
-  const [manualUrl, setManualUrl] = useState<string | null>(MANUAL_URL);
 
-  const checkManual = async () => {
+  const loadFiles = async () => {
     setError(null);
     setLoading(true);
 
     try {
-      if (MANUAL_URL) {
-        const res = await axios.get(MANUAL_URL, {
-          responseType: 'text',
-          timeout: 12000,
-        });
-
-        if (res.status >= 200 && res.status < 300) {
-          setManualUrl(MANUAL_URL);
-          setAvailable(true);
-          return;
-        }
-      }
-
-      const res = await api.get('/api/manual-file');
-
-      const manual = res.data?.data ?? null;
-      const pdfUrl = absUrl(pick(manual, 'url'));
-      const title = pick(manual, 'title');
-      const summary = pick(manual, 'summary');
-
-      setManualTitle(title || 'Citizen Manual');
-      setManualSummary(summary || null);
-      setManualUrl(pdfUrl);
-
-      if (!pdfUrl) {
-        setManualTitle("2026 Citizen's Manual");
-        setManualSummary(null);
-        setAvailable(true);
-        return;
-      }
-
-      setAvailable(true);
+      const res = await api.get('/api/file-links', {
+        params: {
+          'sort[0]': 'featured:desc',
+          'sort[1]': 'sortOrder:asc',
+          'sort[2]': 'title:asc',
+          'pagination[pageSize]': 100,
+        },
+      });
+      setFiles(safeList(res.data));
     } catch (e: any) {
-      setManualTitle("2026 Citizen's Manual");
-      setManualSummary(null);
-      setManualUrl(null);
-      setAvailable(true);
+      setFiles([]);
+      setError(e?.response?.data?.error?.message || e.message);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    checkManual();
+    loadFiles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const openManual = async () => {
-    setError(null);
-
-    try {
-      if (manualUrl) {
-        await Linking.openURL(manualUrl);
-        return;
-      }
-
-      const asset = Asset.fromModule(CITIZEN_MANUAL_PDF);
-      await asset.downloadAsync();
-      const uri = asset.localUri || asset.uri;
-
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, {
-          dialogTitle: "Open 2026 Citizen's Manual",
-          mimeType: 'application/pdf',
-          UTI: 'com.adobe.pdf',
-        });
-        return;
-      }
-
-      await Linking.openURL(uri);
-    } catch (e: any) {
-      setError(e?.message || 'Unable to open the citizen manual.');
-    }
-  };
 
   return (
     <ScreenFrame>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 28 }}>
-        <SectionCard title="Citizen Manual" eyebrow="Reference">
+        <SectionCard title="Files" eyebrow="Resources">
           <Text style={{ color: COLORS.text, lineHeight: 22 }}>
-            Open the official 2026 Badger Boys State citizen manual as a PDF.
+            Google Drive PDFs and program documents.
           </Text>
-          <Text style={{ marginTop: 12, color: COLORS.ink, fontWeight: '800', fontSize: 18 }}>
-            {manualTitle}
-          </Text>
-          {manualSummary ? (
-            <Text style={{ marginTop: 8, color: COLORS.text, lineHeight: 21 }}>{manualSummary}</Text>
-          ) : null}
-
           <View style={{ marginTop: 16, gap: 10 }}>
-            <ActionButton label="Open Manual PDF" onPress={openManual} />
+            <ActionButton label={loading ? 'Refreshing...' : 'Refresh Files'} onPress={loadFiles} />
           </View>
 
           {loading ? (
@@ -1004,177 +926,43 @@ function ManualScreen() {
             </View>
           ) : null}
 
-          {available === true ? (
-            <Text style={{ marginTop: 14, color: COLORS.blue, fontWeight: '800' }}>
-              Manual is available and ready to open.
-            </Text>
-          ) : null}
-
-          {available === false ? (
+          {error ? (
             <Text style={{ marginTop: 14, color: COLORS.red, fontWeight: '700' }}>
-              {error || 'Citizen manual PDF was not found yet.'}
+              {error}
             </Text>
           ) : null}
         </SectionCard>
+
+        {files.length === 0 && !loading ? (
+          <Text style={{ color: COLORS.muted }}>No files have been posted yet.</Text>
+        ) : null}
+
+        {files.map((file: any) => {
+          const description = richTextToPlain(pick(file, 'description'));
+          const url = String(pick(file, 'url') || '');
+          const category = pick(file, 'category');
+
+          return (
+            <SectionCard
+              key={String(file?.id)}
+              title={pick(file, 'title') || 'Untitled file'}
+              eyebrow={category ? String(category) : pick(file, 'featured') ? 'Featured' : undefined}
+            >
+              {description ? (
+                <Text style={{ color: COLORS.text, lineHeight: 22 }}>{description}</Text>
+              ) : null}
+              <View style={{ marginTop: description ? 14 : 4 }}>
+                <ActionButton
+                  label="Open PDF"
+                  onPress={() => {
+                    if (url) Linking.openURL(url);
+                  }}
+                />
+              </View>
+            </SectionCard>
+          );
+        })}
       </ScrollView>
-    </ScreenFrame>
-  );
-}
-
-function CounselorScreen() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [jwt, setJwt] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const applyJwtEverywhere = (token: string | null) => {
-    (globalThis as any).authToken = token ?? undefined;
-
-    if (token) {
-      api.defaults.headers.common.Authorization = `Bearer ${token}`;
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
-    } else {
-      delete api.defaults.headers.common.Authorization;
-      delete axios.defaults.headers.common.Authorization;
-      delete axios.defaults.headers.common.authorization;
-    }
-  };
-
-  useEffect(() => {
-    applyJwtEverywhere(jwt);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [jwt]);
-
-  const login = async () => {
-    setError(null);
-
-    try {
-      const res = await api.post('/api/auth/local', {
-        identifier: email,
-        password,
-      });
-
-      const token = res.data?.jwt;
-      if (!token) throw new Error('Login succeeded but no jwt was returned.');
-
-      applyJwtEverywhere(token);
-      setJwt(token);
-    } catch (e: any) {
-      setError(e?.response?.data?.error?.message || e.message);
-    }
-  };
-
-  const signOut = () => {
-    setJwt(null);
-    setEmail('');
-    setPassword('');
-    setError(null);
-    applyJwtEverywhere(null);
-  };
-
-  if (jwt) {
-    return (
-      <ScreenFrame tone="ink">
-        <View
-          style={{
-            paddingHorizontal: 16,
-            paddingTop: 12,
-            paddingBottom: 8,
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ fontSize: 18, fontWeight: '800', color: COLORS.white }}>
-            Counselor Access
-          </Text>
-          <Pressable onPress={signOut}>
-            <Text style={{ color: '#FFB6C1', fontWeight: '800' }}>Sign out</Text>
-          </Pressable>
-        </View>
-        <View style={{ flex: 1, backgroundColor: COLORS.cream }}>
-          <CounselorStack key={jwt} />
-        </View>
-      </ScreenFrame>
-    );
-  }
-
-  return (
-    <ScreenFrame tone="ink">
-      <StatusBar barStyle="light-content" />
-      <View style={{ padding: 16 }}>
-        <View
-          style={{
-            backgroundColor: COLORS.navy,
-            borderRadius: 24,
-            padding: 20,
-            borderWidth: 1,
-            borderColor: '#1B4279',
-          }}
-        >
-          <Text
-            style={{
-              color: COLORS.sky,
-              fontSize: 11,
-              fontWeight: '800',
-              letterSpacing: 2,
-              textTransform: 'uppercase',
-            }}
-          >
-            Staff Portal
-          </Text>
-          <Text
-            style={{
-              color: COLORS.white,
-              fontSize: 28,
-              fontWeight: '900',
-              marginTop: 8,
-            }}
-          >
-            Counselor Sign In
-          </Text>
-          <Text style={{ color: '#C6D3EA', marginTop: 8, lineHeight: 20 }}>
-            Secure access to rosters, county assignments, and staff schedule tools.
-          </Text>
-
-          <View style={{ marginTop: 16, gap: 10 }}>
-            <TextInput
-              autoCapitalize="none"
-              placeholder="Email"
-              placeholderTextColor="#7E93B9"
-              value={email}
-              onChangeText={setEmail}
-              style={{
-                backgroundColor: '#081731',
-                borderRadius: 12,
-                padding: 13,
-                color: COLORS.white,
-                borderWidth: 1,
-                borderColor: '#2B4E84',
-              }}
-            />
-            <TextInput
-              placeholder="Password"
-              placeholderTextColor="#7E93B9"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-              style={{
-                backgroundColor: '#081731',
-                borderRadius: 12,
-                padding: 13,
-                color: COLORS.white,
-                borderWidth: 1,
-                borderColor: '#2B4E84',
-              }}
-            />
-            <ActionButton label="Sign in" onPress={login} />
-            {error ? (
-              <Text style={{ color: '#FFB6C1', fontWeight: '700' }}>{error}</Text>
-            ) : null}
-          </View>
-        </View>
-      </View>
     </ScreenFrame>
   );
 }
@@ -1212,8 +1000,7 @@ export default function App() {
         <Tab.Screen name="Home" component={HomeScreen} />
         <Tab.Screen name="Schedule" component={ScheduleScreen} />
         <Tab.Screen name="Press" component={PressScreen} />
-        <Tab.Screen name="Manual" component={ManualScreen} />
-        <Tab.Screen name="Counselor" component={CounselorScreen} />
+        <Tab.Screen name="Files" component={FilesScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );

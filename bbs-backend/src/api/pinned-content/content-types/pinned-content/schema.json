@@ -1,0 +1,32 @@
+{
+  "kind": "singleType",
+  "collectionName": "pinned_contents",
+  "info": {
+    "singularName": "pinned-content",
+    "pluralName": "pinned-contents",
+    "displayName": "Pinned Content"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "body": {
+      "type": "richtext"
+    },
+    "buttonLabel": {
+      "type": "string"
+    },
+    "buttonUrl": {
+      "type": "text"
+    },
+    "active": {
+      "type": "boolean",
+      "default": true
+    }
+  }
+}

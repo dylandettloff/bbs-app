@@ -1,0 +1,37 @@
+{
+  "kind": "collectionType",
+  "collectionName": "file_links",
+  "info": {
+    "singularName": "file-link",
+    "pluralName": "file-links",
+    "displayName": "File Link"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "title": {
+      "type": "string",
+      "required": true
+    },
+    "description": {
+      "type": "richtext"
+    },
+    "url": {
+      "type": "text",
+      "required": true
+    },
+    "category": {
+      "type": "string"
+    },
+    "sortOrder": {
+      "type": "integer",
+      "default": 0
+    },
+    "featured": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
