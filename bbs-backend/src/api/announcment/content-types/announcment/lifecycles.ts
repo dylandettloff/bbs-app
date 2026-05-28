@@ -43,10 +43,10 @@ async function notifyForAnnouncment(row: any) {
   const tokens = await getAllPushTokens();
   if (tokens.length === 0) return;
 
-  const title = row?.title ? String(row.title) : 'New Announcment';
+  const title = row?.title ? String(row.title) : 'New Announcement';
   const body = row?.body
     ? String(row.body).replace(/<[^>]+>/g, '').slice(0, 140)
-    : 'A new announcment has been posted.';
+    : 'A new announcement has been posted.';
 
   await sendExpoPushNotifications({
     tokens,

@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   Image,
   Linking,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -13,6 +14,8 @@ import {
 } from 'react-native';
 import axios from 'axios';
 import { Asset } from 'expo-asset';
+import * as Device from 'expo-device';
+import * as Notifications from 'expo-notifications';
 import * as Sharing from 'expo-sharing';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -23,6 +26,16 @@ const MANUAL_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_CITIZEN_MANUAL
 const Tab: any = createBottomTabNavigator();
 const BRAND_LOGO = require('./assets/badger_boys_state_inc_logo.jpeg');
 const CITIZEN_MANUAL_PDF = require('./assets/citizens-manual-2026.pdf');
+const EAS_PROJECT_ID = 'c8aadf84-b565-4fed-b5c1-e6c752978910';
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+    shouldShowBanner: true,
+    shouldShowList: true,
+  }),
+});
 
 const COLORS = {
   ink: '#12345C',
@@ -42,6 +55,43 @@ const api = axios.create({
   baseURL: API_URL,
   timeout: 20000,
 });
+
+async function registerForPushNotifications() {
+  try {
+    if (!Device.isDevice) return;
+
+    if (Platform.OS === 'android') {
+      await Notifications.setNotificationChannelAsync('default', {
+        name: 'default',
+        importance: Notifications.AndroidImportance.MAX,
+        vibrationPattern: [0, 250, 250, 250],
+        lightColor: COLORS.blue,
+      });
+    }
+
+    const existing = await Notifications.getPermissionsAsync();
+    let status = existing.status;
+
+    if (status !== 'granted') {
+      const requested = await Notifications.requestPermissionsAsync();
+      status = requested.status;
+    }
+
+    if (status !== 'granted') return;
+
+    const token = await Notifications.getExpoPushTokenAsync({
+      projectId: EAS_PROJECT_ID,
+    });
+
+    await api.post('/api/push/register', {
+      token: token.data,
+      platform: Platform.OS,
+      enabled: true,
+    });
+  } catch (error) {
+    console.warn('Push notification registration failed', error);
+  }
+}
 
 function pick(item: any, key: string) {
   return item?.[key] ?? item?.attributes?.[key];
@@ -348,6 +398,7 @@ function HomeScreen() {
   const [loading, setLoading] = useState(false);
   const [nextEvent, setNextEvent] = useState<any | null>(null);
   const [topPress, setTopPress] = useState<any | null>(null);
+  const [latestAnnouncement, setLatestAnnouncement] = useState<any | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const loadHome = async () => {
@@ -355,7 +406,7 @@ function HomeScreen() {
     setLoading(true);
 
     try {
-      const [eventsRes, pressRes] = await Promise.all([
+      const [eventsRes, pressRes, announcementsRes] = await Promise.all([
         api.get('/api/events', {
           params: {
             sort: 'starts_at:asc',
@@ -367,6 +418,12 @@ function HomeScreen() {
             sort: 'postedAt:desc',
             'pagination[pageSize]': 1,
             populate: 'image',
+          },
+        }),
+        api.get('/api/announcments', {
+          params: {
+            sort: 'publishedAt:desc',
+            'pagination[pageSize]': 1,
           },
         }),
       ]);
@@ -382,8 +439,10 @@ function HomeScreen() {
         .map((item) => item.event);
 
       const presses = safeList(pressRes.data);
+      const announcements = safeList(announcementsRes.data);
       setNextEvent(upcoming[0] ?? null);
       setTopPress(presses[0] ?? null);
+      setLatestAnnouncement(announcements[0] ?? null);
     } catch (e: any) {
       setError(e?.response?.data?.error?.message || e.message);
     } finally {
@@ -398,6 +457,9 @@ function HomeScreen() {
 
   const pressImages = topPress ? getPressImageUrls(topPress) : [];
   const pressBody = topPress ? richTextToPlain(pick(topPress, 'body')) : '';
+  const announcementBody = latestAnnouncement
+    ? richTextToPlain(pick(latestAnnouncement, 'body'))
+    : '';
 
   return (
     <ScreenFrame>
@@ -416,7 +478,31 @@ function HomeScreen() {
             <Text style={{ marginBottom: 12, color: COLORS.red, fontWeight: '700' }}>{error}</Text>
           ) : null}
 
-        <SectionCard title="Next Schedule Item">
+          <SectionCard title="Latest Announcement" eyebrow="Important">
+            {latestAnnouncement ? (
+              <>
+                <Text style={{ color: COLORS.text, fontSize: 19, fontWeight: '900', lineHeight: 24 }}>
+                  {pick(latestAnnouncement, 'title') || 'Announcement'}
+                </Text>
+                {pick(latestAnnouncement, 'publishedAt') ? (
+                  <Text style={{ marginTop: 6, color: COLORS.muted }}>
+                    {formatDate(pick(latestAnnouncement, 'publishedAt'))}
+                  </Text>
+                ) : null}
+                {announcementBody ? (
+                  <Text style={{ marginTop: 12, color: COLORS.text, lineHeight: 22 }}>
+                    {announcementBody.length > 240
+                      ? `${announcementBody.slice(0, 240).trim()}...`
+                      : announcementBody}
+                  </Text>
+                ) : null}
+              </>
+            ) : (
+              <Text style={{ color: COLORS.muted }}>No announcements posted yet.</Text>
+            )}
+          </SectionCard>
+
+          <SectionCard title="Next Schedule Item">
             {nextEvent ? (
               <>
                 <Text style={{ color: COLORS.text, fontSize: 19, fontWeight: '900', lineHeight: 24 }}>
@@ -439,7 +525,7 @@ function HomeScreen() {
             )}
           </SectionCard>
 
-        <SectionCard title="Most Recent News Article">
+          <SectionCard title="Most Recent News Article">
             {topPress ? (
               <>
                 <Text style={{ color: COLORS.text, fontSize: 19, fontWeight: '900', lineHeight: 24 }}>
@@ -1094,6 +1180,10 @@ function CounselorScreen() {
 }
 
 export default function App() {
+  useEffect(() => {
+    registerForPushNotifications();
+  }, []);
+
   return (
     <NavigationContainer>
       <Tab.Navigator
