@@ -8,14 +8,14 @@ export default {
     },
     {
       method: "GET",
-      path: "/me/roster",
-      handler: "api::me.me.roster",
+      path: "/me/profile",
+      handler: "api::me.me.profile",
       config: { auth: {} },
     },
     {
       method: "GET",
-      path: "/me/events",
-      handler: "api::me.me.events",
+      path: "/me/schedule",
+      handler: "api::me.me.schedule",
       config: { auth: {} },
     },
   ],

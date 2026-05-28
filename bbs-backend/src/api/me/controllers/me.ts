@@ -1,88 +1,117 @@
+async function findStudentForUser(userId: number) {
+  const studentsRaw: any = await strapi.entityService.findMany('api::student.student', {
+    filters: {
+      user: {
+        id: {
+          $eq: userId,
+        },
+      },
+    } as any,
+    populate: {
+      city: {
+        fields: ['id', 'name'] as any,
+        populate: {
+          county: {
+            fields: ['id', 'name'] as any,
+          },
+        },
+      },
+      user: {
+        fields: ['id', 'username', 'email'] as any,
+      },
+    },
+    limit: 1,
+  });
+
+  const students = Array.isArray(studentsRaw) ? studentsRaw : studentsRaw ? [studentsRaw] : [];
+  return students[0] ?? null;
+}
+
+function eventMatchesStudent(event: any, student: any) {
+  if (!student) return false;
+  if (event?.staffOnly === true) return false;
+
+  const partyAudience = event?.partyAudience || 'All';
+  if (partyAudience !== 'All' && partyAudience !== student?.party) return false;
+
+  if (event?.allStudents !== false) return true;
+
+  const studentCityId = student?.city?.id;
+  const studentCountyId = student?.city?.county?.id;
+  const targetCities = Array.isArray(event?.targetCities) ? event.targetCities : [];
+  const targetCounties = Array.isArray(event?.targetCounties) ? event.targetCounties : [];
+
+  const cityMatch = targetCities.some((city: any) => city?.id === studentCityId);
+  const countyMatch = targetCounties.some((county: any) => county?.id === studentCountyId);
+
+  return cityMatch || countyMatch;
+}
+
 export default {
   async profile(ctx: any) {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
 
+    const student = await findStudentForUser(user.id);
+    if (!student) return ctx.notFound('No student profile is linked to this login.');
+
     ctx.body = {
       data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+        },
+        student: {
+          id: student.id,
+          id_number: student.id_number,
+          name: student.name,
+          party: student.party,
+          city: student.city
+            ? {
+                id: student.city.id,
+                name: student.city.name,
+              }
+            : null,
+          county: student.city?.county
+            ? {
+                id: student.city.county.id,
+                name: student.city.county.name,
+              }
+            : null,
+        },
       },
     };
   },
 
-  async roster(ctx: any) {
+  async schedule(ctx: any) {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
 
-    const counties = await strapi.entityService.findMany("api::county.county", {
+    const student = await findStudentForUser(user.id);
+    if (!student) return ctx.notFound('No student profile is linked to this login.');
+
+    const eventsRaw: any = await strapi.entityService.findMany('api::event.event', {
       filters: {
-        users_permissions_users: {
-          id: {
-            $eq: user.id,
-          },
+        staffOnly: {
+          $ne: true,
         },
-      },
-      sort: { name: "asc" },
+      } as any,
+      populate: {
+        targetCities: {
+          fields: ['id', 'name'] as any,
+        },
+        targetCounties: {
+          fields: ['id', 'name'] as any,
+        },
+      } as any,
+      sort: { starts_at: 'asc' },
+      limit: 1000,
     });
 
-    ctx.body = { data: counties ?? [] };
-  },
-
-  async cityAccess(ctx: any) {
-    const user = ctx.state.user;
-    if (!user) return ctx.unauthorized();
-
-    const userWithCities = (await strapi.entityService.findOne(
-      "plugin::users-permissions.user",
-      user.id,
-      {
-        populate: {
-          cities: {
-            sort: { name: "asc" },
-          },
-        },
-      }
-    )) as any;
-
-    ctx.body = { data: userWithCities?.cities ?? [] };
-  },
-
-  async counties(ctx: any) {
-    const user = ctx.state.user;
-    if (!user) return ctx.unauthorized();
-
-    const counties = await strapi.entityService.findMany("api::county.county", {
-      filters: {
-        users_permissions_users: {
-          id: {
-            $eq: user.id,
-          },
-        },
-      },
-      sort: { name: "asc" },
-    });
-
-    ctx.body = { data: counties };
-  },
-
-  async events(ctx: any) {
-    const user = ctx.state.user;
-    if (!user) return ctx.unauthorized();
-
-    const staffOnly = String(ctx.query.staffOnly ?? "true") === "true";
-    const nowIso = new Date().toISOString();
-
-    const filters: any = { starts_at: { $gte: nowIso } };
-    if (staffOnly) filters.audience = { $in: ["Staff", "staff"] };
-
-    const items = await strapi.entityService.findMany("api::event.event", {
-      filters,
-      sort: { starts_at: "asc" },
-      limit: 100,
-    });
-
-    ctx.body = { data: items };
+    const events = Array.isArray(eventsRaw) ? eventsRaw : eventsRaw ? [eventsRaw] : [];
+    ctx.body = {
+      data: events.filter((event) => eventMatchesStudent(event, student)),
+    };
   },
 };

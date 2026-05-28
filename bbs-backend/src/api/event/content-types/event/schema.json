@@ -14,6 +14,10 @@
     "title": {
       "type": "string"
     },
+    "externalId": {
+      "type": "string",
+      "unique": true
+    },
     "starts_at": {
       "type": "datetime"
     },
@@ -29,6 +33,30 @@
     "staffOnly": {
       "type": "boolean",
       "default": false
+    },
+    "allStudents": {
+      "type": "boolean",
+      "default": true
+    },
+    "partyAudience": {
+      "type": "enumeration",
+      "enum": [
+        "All",
+        "Federalist",
+        "Nationalist",
+        "Independent"
+      ],
+      "default": "All"
+    },
+    "targetCounties": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::county.county"
+    },
+    "targetCities": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::city.city"
     }
   }
 }

@@ -12,7 +12,12 @@
   "pluginOptions": {},
   "attributes": {
     "id_number": {
-      "type": "integer"
+      "type": "integer",
+      "required": true,
+      "unique": true
+    },
+    "name": {
+      "type": "string"
     },
     "party": {
       "type": "enumeration",
@@ -27,6 +32,11 @@
       "relation": "manyToOne",
       "target": "api::city.city",
       "inversedBy": "students"
+    },
+    "user": {
+      "type": "relation",
+      "relation": "oneToOne",
+      "target": "plugin::users-permissions.user"
     }
   }
 }

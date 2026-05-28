@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   StatusBar,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import axios from 'axios';
@@ -388,7 +389,7 @@ function StoryCard({
   );
 }
 
-function HomeScreen() {
+function HomeScreen({ profile }: { profile?: any }) {
   const [loading, setLoading] = useState(false);
   const [nextEvent, setNextEvent] = useState<any | null>(null);
   const [topPress, setTopPress] = useState<any | null>(null);
@@ -401,12 +402,7 @@ function HomeScreen() {
 
     try {
       const [eventsRes, pressRes, pinnedRes] = await Promise.all([
-        api.get('/api/events', {
-          params: {
-            sort: 'starts_at:asc',
-            'pagination[pageSize]': 200,
-          },
-        }),
+        api.get('/api/me/schedule'),
         api.get('/api/presses', {
           params: {
             sort: 'postedAt:desc',
@@ -465,6 +461,19 @@ function HomeScreen() {
 
           {error ? (
             <Text style={{ marginBottom: 12, color: COLORS.red, fontWeight: '700' }}>{error}</Text>
+          ) : null}
+
+          {profile?.student ? (
+            <SectionCard title="My Assignment" eyebrow="Signed In">
+              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '900' }}>
+                {profile.student.name || `Citizen ${profile.student.id_number}`}
+              </Text>
+              <Text style={{ marginTop: 8, color: COLORS.muted, lineHeight: 21 }}>
+                {profile.student.city?.name || 'City not assigned'}
+                {profile.student.county?.name ? `, ${profile.student.county.name} County` : ''}
+                {profile.student.party ? ` • ${profile.student.party}` : ''}
+              </Text>
+            </SectionCard>
           ) : null}
 
           {pinnedContent ? (
@@ -561,15 +570,8 @@ function ScheduleScreen() {
     setLoading(true);
 
     try {
-      const res = await api.get('/api/events', {
-        params: {
-          sort: 'starts_at:asc',
-          'pagination[pageSize]': 500,
-        },
-      });
-
-      const allEvents = safeList(res.data);
-      setEvents(allEvents.filter((event) => !isStaffOnlyEvent(event)));
+      const res = await api.get('/api/me/schedule');
+      setEvents(safeList(res.data));
     } catch (e: any) {
       setEvents([]);
       setError(e?.response?.data?.error?.message || e.message);
@@ -967,10 +969,181 @@ function FilesScreen() {
   );
 }
 
+function LoginScreen({
+  loading,
+  error,
+  onLogin,
+}: {
+  loading: boolean;
+  error: string | null;
+  onLogin: (citizenId: string, password: string) => void;
+}) {
+  const [citizenId, setCitizenId] = useState('');
+  const [password, setPassword] = useState('');
+
+  return (
+    <ScreenFrame tone="ink">
+      <StatusBar barStyle="light-content" />
+      <ScrollView contentContainerStyle={{ padding: 18, paddingTop: 28 }}>
+        <Image
+          source={BRAND_LOGO}
+          style={{
+            width: 270,
+            height: 112,
+            alignSelf: 'center',
+            marginBottom: 22,
+          }}
+          resizeMode="contain"
+        />
+        <View
+          style={{
+            backgroundColor: COLORS.navy,
+            borderRadius: 24,
+            padding: 20,
+            borderWidth: 1,
+            borderColor: '#1B4279',
+          }}
+        >
+          <Text
+            style={{
+              color: COLORS.sky,
+              fontSize: 11,
+              fontWeight: '800',
+              letterSpacing: 2,
+              textTransform: 'uppercase',
+            }}
+          >
+            Badger Boys State
+          </Text>
+          <Text
+            style={{
+              color: COLORS.white,
+              fontSize: 28,
+              fontWeight: '900',
+              marginTop: 8,
+            }}
+          >
+            Citizen Sign In
+          </Text>
+          <Text style={{ color: '#C6D3EA', marginTop: 8, lineHeight: 20 }}>
+            Enter your citizen ID and password to view your schedule, files, and updates.
+          </Text>
+
+          <View style={{ marginTop: 16, gap: 10 }}>
+            <TextInput
+              keyboardType="number-pad"
+              inputMode="numeric"
+              autoCapitalize="none"
+              placeholder="Citizen ID"
+              placeholderTextColor="#7E93B9"
+              value={citizenId}
+              onChangeText={(value) => setCitizenId(value.replace(/[^0-9]/g, ''))}
+              style={{
+                backgroundColor: '#081731',
+                borderRadius: 12,
+                padding: 13,
+                color: COLORS.white,
+                borderWidth: 1,
+                borderColor: '#2B4E84',
+              }}
+            />
+            <TextInput
+              placeholder="Password"
+              placeholderTextColor="#7E93B9"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              style={{
+                backgroundColor: '#081731',
+                borderRadius: 12,
+                padding: 13,
+                color: COLORS.white,
+                borderWidth: 1,
+                borderColor: '#2B4E84',
+              }}
+            />
+            <ActionButton
+              label={loading ? 'Signing in...' : 'Sign in'}
+              onPress={() => onLogin(citizenId, password)}
+            />
+            {error ? (
+              <Text style={{ color: '#FFB6C1', fontWeight: '700', lineHeight: 20 }}>
+                {error}
+              </Text>
+            ) : null}
+          </View>
+        </View>
+      </ScrollView>
+    </ScreenFrame>
+  );
+}
+
 export default function App() {
+  const [jwt, setJwt] = useState<string | null>(null);
+  const [profile, setProfile] = useState<any | null>(null);
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+
   useEffect(() => {
-    registerForPushNotifications();
-  }, []);
+    if (jwt) {
+      registerForPushNotifications();
+    }
+  }, [jwt]);
+
+  const applyJwt = (token: string | null) => {
+    if (token) {
+      api.defaults.headers.common.Authorization = `Bearer ${token}`;
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+    } else {
+      delete api.defaults.headers.common.Authorization;
+      delete axios.defaults.headers.common.Authorization;
+      delete axios.defaults.headers.common.authorization;
+    }
+  };
+
+  const login = async (citizenId: string, password: string) => {
+    setAuthError(null);
+
+    if (!citizenId || !password) {
+      setAuthError('Enter your citizen ID and password.');
+      return;
+    }
+
+    setAuthLoading(true);
+
+    try {
+      const loginRes = await api.post('/api/auth/local', {
+        identifier: citizenId,
+        password,
+      });
+      const token = loginRes.data?.jwt;
+      if (!token) throw new Error('Login succeeded but no token was returned.');
+
+      applyJwt(token);
+      const profileRes = await api.get('/api/me/profile');
+
+      setJwt(token);
+      setProfile(profileRes.data?.data ?? null);
+    } catch (e: any) {
+      applyJwt(null);
+      setJwt(null);
+      setProfile(null);
+      setAuthError(e?.response?.data?.error?.message || e.message || 'Unable to sign in.');
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const signOut = () => {
+    applyJwt(null);
+    setJwt(null);
+    setProfile(null);
+    setAuthError(null);
+  };
+
+  if (!jwt) {
+    return <LoginScreen loading={authLoading} error={authError} onLogin={login} />;
+  }
 
   return (
     <NavigationContainer>
@@ -997,10 +1170,31 @@ export default function App() {
           },
         }}
       >
-        <Tab.Screen name="Home" component={HomeScreen} />
+        <Tab.Screen name="Home">{() => <HomeScreen profile={profile} />}</Tab.Screen>
         <Tab.Screen name="Schedule" component={ScheduleScreen} />
         <Tab.Screen name="Press" component={PressScreen} />
         <Tab.Screen name="Files" component={FilesScreen} />
+        <Tab.Screen name="Sign Out">
+          {() => (
+            <ScreenFrame>
+              <View style={{ padding: 16 }}>
+                <SectionCard title="Signed In" eyebrow="Account">
+                  <Text style={{ color: COLORS.text, lineHeight: 22 }}>
+                    {profile?.student?.name || `Citizen ${profile?.student?.id_number || ''}`}
+                  </Text>
+                  <Text style={{ marginTop: 6, color: COLORS.muted, lineHeight: 20 }}>
+                    {profile?.student?.city?.name || 'City not assigned'}
+                    {profile?.student?.county?.name ? `, ${profile.student.county.name} County` : ''}
+                    {profile?.student?.party ? ` • ${profile.student.party}` : ''}
+                  </Text>
+                  <View style={{ marginTop: 16 }}>
+                    <ActionButton label="Sign out" onPress={signOut} />
+                  </View>
+                </SectionCard>
+              </View>
+            </ScreenFrame>
+          )}
+        </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );
