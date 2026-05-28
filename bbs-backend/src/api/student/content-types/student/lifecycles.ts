@@ -1,13 +1,5 @@
 import { sendExpoPushNotifications } from '../../../../utils/push';
 
-function toUserTokens(rawUsers: any[]): string[] {
-  return rawUsers.flatMap((u) =>
-    Array.isArray(u?.expoPushTokens)
-      ? u.expoPushTokens.filter((t: unknown) => typeof t === 'string')
-      : []
-  );
-}
-
 export default {
   async afterUpdate(event: any) {
     const studentId = event?.result?.id;
@@ -23,14 +15,8 @@ export default {
             city: {
               fields: ['id', 'name'] as any,
               populate: {
-                users: { fields: ['id', 'expoPushTokens'] as any },
                 county: {
                   fields: ['id', 'name'] as any,
-                  populate: {
-                    users_permissions_users: {
-                      fields: ['id', 'expoPushTokens'] as any,
-                    },
-                  },
                 },
               },
             },
@@ -38,12 +24,26 @@ export default {
         }
       );
 
-      const cityUsers = Array.isArray(student?.city?.users) ? student.city.users : [];
-      const countyUsers = Array.isArray(student?.city?.county?.users_permissions_users)
-        ? student.city.county.users_permissions_users
+      const tokenRowsRaw: any = await strapi.entityService.findMany(
+        'api::push-token.push-token' as any,
+        {
+          fields: ['token', 'enabled'] as any,
+          filters: { enabled: { $eq: true } } as any,
+          limit: 10000,
+        }
+      );
+      const tokenRows: any[] = Array.isArray(tokenRowsRaw)
+        ? tokenRowsRaw
+        : tokenRowsRaw
+        ? [tokenRowsRaw]
         : [];
-
-      const tokens = Array.from(new Set(toUserTokens([...cityUsers, ...countyUsers])));
+      const tokens = Array.from(
+        new Set(
+          tokenRows
+            .map((row) => row?.token)
+            .filter((token): token is string => typeof token === 'string')
+        )
+      );
       if (tokens.length === 0) return;
 
       const studentName = student?.Name || `Student #${studentId}`;

@@ -1,22 +1,6 @@
 import { sendExpoPushNotifications } from '../../../../utils/push';
 
-function tokenList(values: unknown): string[] {
-  return Array.isArray(values)
-    ? values.filter((v): v is string => typeof v === 'string')
-    : [];
-}
-
 async function getAllPushTokens(): Promise<string[]> {
-  const userRows: any[] = await strapi.entityService.findMany(
-    'plugin::users-permissions.user',
-    {
-      fields: ['id', 'expoPushTokens'] as any,
-      limit: 5000,
-    }
-  );
-
-  const appUsersTokens = userRows.flatMap((u) => tokenList(u?.expoPushTokens));
-
   const publicTokenRowsRaw: any = await strapi.entityService.findMany(
     'api::push-token.push-token' as any,
     {
@@ -34,7 +18,7 @@ async function getAllPushTokens(): Promise<string[]> {
     .map((r) => r?.token)
     .filter((t): t is string => typeof t === 'string');
 
-  return Array.from(new Set([...appUsersTokens, ...publicTokens]));
+  return Array.from(new Set(publicTokens));
 }
 
 async function notifyForAnnouncment(row: any) {
