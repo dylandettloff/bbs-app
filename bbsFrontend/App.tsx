@@ -281,9 +281,9 @@ function BrandHeader() {
     <View
       style={{
         backgroundColor: COLORS.blue,
-        paddingHorizontal: 18,
-        paddingTop: 10,
-        paddingBottom: 12,
+        paddingHorizontal: 10,
+        paddingTop: 4,
+        paddingBottom: 6,
         borderBottomLeftRadius: 26,
         borderBottomRightRadius: 26,
       }}
@@ -292,8 +292,8 @@ function BrandHeader() {
         source={BRAND_LOGO}
         style={{
           width: '100%',
-          maxWidth: 432,
-          height: 179,
+          maxWidth: 500,
+          height: 207,
           alignSelf: 'center',
         }}
         resizeMode="contain"
@@ -1083,8 +1083,8 @@ function LoginScreen({
           source={BRAND_LOGO}
           style={{
             width: '100%',
-            maxWidth: 432,
-            height: 179,
+            maxWidth: 500,
+            height: 207,
             alignSelf: 'center',
             marginBottom: 22,
           }}
