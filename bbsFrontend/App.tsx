@@ -446,7 +446,7 @@ function HomeScreen({ profile }: { profile?: any }) {
   const pinnedButtonLabel = pinnedContent ? pick(pinnedContent, 'buttonLabel') : null;
   const pinnedButtonUrl = pinnedContent ? pick(pinnedContent, 'buttonUrl') : null;
   const assignmentTitle = profile?.student
-    ? `${profile.student.city?.name || 'City not assigned'}${
+    ? `City of ${profile.student.city?.name || 'City not assigned'}${
         profile.student.county?.name ? `, ${profile.student.county.name} County` : ''
       }`
     : '';
