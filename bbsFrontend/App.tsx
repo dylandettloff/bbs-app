@@ -282,8 +282,8 @@ function BrandHeader() {
       style={{
         backgroundColor: COLORS.blue,
         paddingHorizontal: 10,
-        paddingTop: 4,
-        paddingBottom: 6,
+        paddingTop: 0,
+        paddingBottom: 2,
         borderBottomLeftRadius: 26,
         borderBottomRightRadius: 26,
       }}
