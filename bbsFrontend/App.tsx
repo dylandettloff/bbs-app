@@ -106,6 +106,53 @@ function formatDate(iso?: string) {
   return new Date(ts).toLocaleString();
 }
 
+function formatScheduleTime(date: Date) {
+  return date
+    .toLocaleTimeString([], {
+      hour: 'numeric',
+      minute: '2-digit',
+    })
+    .replace(/\s/g, '')
+    .toLowerCase();
+}
+
+function formatScheduleRange(startIso?: string, endIso?: string) {
+  if (!startIso) return 'Invalid date';
+
+  const start = new Date(startIso);
+  if (Number.isNaN(start.getTime())) return 'Invalid date';
+
+  const date = `${start.getMonth() + 1}/${start.getDate()}`;
+  const startTime = formatScheduleTime(start);
+
+  if (!endIso) return `${date} ${startTime}`;
+
+  const end = new Date(endIso);
+  if (Number.isNaN(end.getTime())) return `${date} ${startTime}`;
+
+  const sameDay =
+    start.getFullYear() === end.getFullYear() &&
+    start.getMonth() === end.getMonth() &&
+    start.getDate() === end.getDate();
+  const endPrefix = sameDay ? '' : `${end.getMonth() + 1}/${end.getDate()} `;
+
+  return `${date} ${startTime} - ${endPrefix}${formatScheduleTime(end)}`;
+}
+
+function splitLocation(location?: string | null) {
+  const value = String(location || '').trim();
+  if (!value) return null;
+
+  const [building, ...addressParts] = value.split(',');
+  const address = addressParts.join(',').trim();
+
+  return {
+    building: building.trim(),
+    address,
+    mapsQuery: encodeURIComponent(value),
+  };
+}
+
 function stripHtml(input?: string) {
   if (!input) return '';
   return String(input)
@@ -310,6 +357,7 @@ function SectionCard({
 function StoryCard({
   title,
   subtitle,
+  location,
   body,
   imageUrl,
   open,
@@ -318,12 +366,15 @@ function StoryCard({
 }: {
   title: string;
   subtitle?: string;
+  location?: string | null;
   body?: string;
   imageUrl?: string | null;
   open: boolean;
   onPress: () => void;
   linkUrl?: string | null;
 }) {
+  const locationParts = splitLocation(location);
+
   return (
     <Pressable
       onPress={onPress}
@@ -339,6 +390,22 @@ function StoryCard({
       <Text style={{ color: COLORS.ink, fontSize: 18, fontWeight: '900' }}>{title}</Text>
       {subtitle ? (
         <Text style={{ color: COLORS.muted, marginTop: 4, fontSize: 13 }}>{subtitle}</Text>
+      ) : null}
+      {locationParts ? (
+        <View style={{ marginTop: 8 }}>
+          <Text style={{ color: COLORS.blue, fontWeight: '800' }}>{locationParts.building}</Text>
+          {locationParts.address ? (
+            <Pressable
+              onPress={() =>
+                Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${locationParts.mapsQuery}`)
+              }
+            >
+              <Text style={{ color: COLORS.blue, marginTop: 2, textDecorationLine: 'underline' }}>
+                {locationParts.address}
+              </Text>
+            </Pressable>
+          ) : null}
+        </View>
       ) : null}
       <Text
         style={{
@@ -472,6 +539,8 @@ function HomeScreen({ profile }: { profile?: any }) {
             <Text style={{ marginBottom: 12, color: COLORS.red, fontWeight: '700' }}>{error}</Text>
           ) : null}
 
+          {assignmentTitle ? <SectionCard title={assignmentTitle} /> : null}
+
           {pinnedContent ? (
             <SectionCard title={pick(pinnedContent, 'title') || 'Pinned Update'} eyebrow="Pinned">
               <>
@@ -492,8 +561,6 @@ function HomeScreen({ profile }: { profile?: any }) {
             </SectionCard>
           ) : null}
 
-          {assignmentTitle ? <SectionCard title={assignmentTitle} /> : null}
-
           <SectionCard title="Next Schedule Item">
             {nextEvent ? (
               <>
@@ -501,16 +568,39 @@ function HomeScreen({ profile }: { profile?: any }) {
                   {pick(nextEvent, 'title') || 'Untitled event'}
                 </Text>
                 <Text style={{ marginTop: 8, color: COLORS.muted, lineHeight: 20 }}>
-                  {formatDate(pick(nextEvent, 'starts_at'))}
-                  {pick(nextEvent, 'ends_at')
-                    ? ` → ${formatDate(pick(nextEvent, 'ends_at'))}`
-                    : ''}
+                  {formatScheduleRange(pick(nextEvent, 'starts_at'), pick(nextEvent, 'ends_at'))}
                 </Text>
-                {pick(nextEvent, 'location') ? (
-                  <Text style={{ marginTop: 6, color: COLORS.blue, fontWeight: '700' }}>
-                    {String(pick(nextEvent, 'location'))}
-                  </Text>
-                ) : null}
+                {(() => {
+                  const locationParts = splitLocation(pick(nextEvent, 'location'));
+                  if (!locationParts) return null;
+
+                  return (
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ color: COLORS.blue, fontWeight: '800' }}>
+                        {locationParts.building}
+                      </Text>
+                      {locationParts.address ? (
+                        <Pressable
+                          onPress={() =>
+                            Linking.openURL(
+                              `https://www.google.com/maps/search/?api=1&query=${locationParts.mapsQuery}`
+                            )
+                          }
+                        >
+                          <Text
+                            style={{
+                              color: COLORS.blue,
+                              marginTop: 2,
+                              textDecorationLine: 'underline',
+                            }}
+                          >
+                            {locationParts.address}
+                          </Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  );
+                })()}
               </>
             ) : (
               <Text style={{ color: COLORS.muted }}>No upcoming public events found.</Text>
@@ -620,9 +710,8 @@ function ScheduleScreen() {
             <StoryCard
               key={id}
               title={title}
-              subtitle={`${starts ? formatDate(starts) : 'Invalid date'}${
-                ends ? ` → ${formatDate(ends)}` : ''
-              }${location ? ` • ${String(location)}` : ''}`}
+              subtitle={formatScheduleRange(starts, ends)}
+              location={location ? String(location) : null}
               body={desc || '(No description)'}
               open={isOpen}
               onPress={() => setExpandedId((prev) => (prev === id ? null : id))}
