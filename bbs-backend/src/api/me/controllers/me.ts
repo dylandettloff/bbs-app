@@ -1,13 +1,6 @@
-async function findStudentForUser(userId: number) {
-  const studentsRaw: any = await strapi.entityService.findMany('api::student.student', {
-    filters: {
-      user: {
-        id: {
-          $eq: userId,
-        },
-      },
-    } as any,
-    populate: {
+async function findStudentForUser(user: any) {
+  const citizenId = Number(user?.username);
+  const populate = {
       city: {
         fields: ['id', 'name'] as any,
         populate: {
@@ -19,7 +12,28 @@ async function findStudentForUser(userId: number) {
       user: {
         fields: ['id', 'username', 'email'] as any,
       },
-    },
+    };
+
+  if (Number.isInteger(citizenId)) {
+    const student = await strapi.db.query('api::student.student').findOne({
+      where: {
+        id_number: citizenId,
+      },
+      populate,
+    } as any);
+
+    if (student) return student;
+  }
+
+  const studentsRaw: any = await strapi.entityService.findMany('api::student.student', {
+    filters: {
+      user: {
+        id: {
+          $eq: user.id,
+        },
+      },
+    } as any,
+    populate,
     limit: 1,
   });
 
@@ -52,7 +66,7 @@ export default {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
 
-    const student = await findStudentForUser(user.id);
+    const student = await findStudentForUser(user);
     if (!student) return ctx.notFound('No student profile is linked to this login.');
 
     ctx.body = {
@@ -88,7 +102,7 @@ export default {
     const user = ctx.state.user;
     if (!user) return ctx.unauthorized();
 
-    const student = await findStudentForUser(user.id);
+    const student = await findStudentForUser(user);
     if (!student) return ctx.notFound('No student profile is linked to this login.');
 
     const eventsRaw: any = await strapi.entityService.findMany('api::event.event', {
