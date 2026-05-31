@@ -291,8 +291,9 @@ function BrandHeader() {
       <Image
         source={BRAND_LOGO}
         style={{
-          width: 270,
-          height: 112,
+          width: '100%',
+          maxWidth: 432,
+          height: 179,
           alignSelf: 'center',
         }}
         resizeMode="contain"
@@ -1081,8 +1082,9 @@ function LoginScreen({
         <Image
           source={BRAND_LOGO}
           style={{
-            width: 270,
-            height: 112,
+            width: '100%',
+            maxWidth: 432,
+            height: 179,
             alignSelf: 'center',
             marginBottom: 22,
           }}
