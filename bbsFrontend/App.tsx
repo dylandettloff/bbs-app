@@ -969,12 +969,18 @@ function FilesScreen() {
 
 function LoginScreen({
   loading,
+  resetLoading,
   error,
+  resetMessage,
   onLogin,
+  onForgotPassword,
 }: {
   loading: boolean;
+  resetLoading: boolean;
   error: string | null;
+  resetMessage: string | null;
   onLogin: (citizenId: string, password: string) => void;
+  onForgotPassword: (citizenId: string) => void;
 }) {
   const [citizenId, setCitizenId] = useState('');
   const [password, setPassword] = useState('');
@@ -1064,9 +1070,23 @@ function LoginScreen({
               label={loading ? 'Signing in...' : 'Sign in'}
               onPress={() => onLogin(citizenId, password)}
             />
+            <Pressable
+              onPress={() => onForgotPassword(citizenId)}
+              disabled={resetLoading}
+              style={{ paddingVertical: 8, alignItems: 'center' }}
+            >
+              <Text style={{ color: COLORS.sky, fontWeight: '800' }}>
+                {resetLoading ? 'Sending reset email...' : 'Forgot password?'}
+              </Text>
+            </Pressable>
             {error ? (
               <Text style={{ color: '#FFB6C1', fontWeight: '700', lineHeight: 20 }}>
                 {error}
+              </Text>
+            ) : null}
+            {resetMessage ? (
+              <Text style={{ color: '#C6D3EA', fontWeight: '700', lineHeight: 20 }}>
+                {resetMessage}
               </Text>
             ) : null}
           </View>
@@ -1080,7 +1100,9 @@ export default function App() {
   const [jwt, setJwt] = useState<string | null>(null);
   const [profile, setProfile] = useState<any | null>(null);
   const [authLoading, setAuthLoading] = useState(false);
+  const [resetLoading, setResetLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [resetMessage, setResetMessage] = useState<string | null>(null);
 
   useEffect(() => {
     if (jwt) {
@@ -1101,6 +1123,7 @@ export default function App() {
 
   const login = async (citizenId: string, password: string) => {
     setAuthError(null);
+    setResetMessage(null);
 
     if (!citizenId || !password) {
       setAuthError('Enter your citizen ID and password.');
@@ -1132,6 +1155,29 @@ export default function App() {
     }
   };
 
+  const requestPasswordReset = async (citizenId: string) => {
+    setAuthError(null);
+    setResetMessage(null);
+
+    if (!citizenId) {
+      setAuthError('Enter your citizen ID first.');
+      return;
+    }
+
+    setResetLoading(true);
+
+    try {
+      await api.post('/api/citizen-auth/forgot-password', {
+        citizenId,
+      });
+      setResetMessage('If that citizen ID exists, a password reset email has been sent.');
+    } catch (e: any) {
+      setAuthError(e?.response?.data?.error?.message || e.message || 'Unable to send reset email.');
+    } finally {
+      setResetLoading(false);
+    }
+  };
+
   const signOut = () => {
     applyJwt(null);
     setJwt(null);
@@ -1140,7 +1186,16 @@ export default function App() {
   };
 
   if (!jwt) {
-    return <LoginScreen loading={authLoading} error={authError} onLogin={login} />;
+    return (
+      <LoginScreen
+        loading={authLoading}
+        resetLoading={resetLoading}
+        error={authError}
+        resetMessage={resetMessage}
+        onLogin={login}
+        onForgotPassword={requestPasswordReset}
+      />
+    );
   }
 
   return (
