@@ -401,7 +401,7 @@ function HomeScreen({ profile }: { profile?: any }) {
     setLoading(true);
 
     try {
-      const [eventsRes, pressRes, pinnedRes] = await Promise.all([
+      const [eventsRes, pressRes, pinnedRes] = await Promise.allSettled([
         api.get('/api/me/schedule'),
         api.get('/api/presses', {
           params: {
@@ -413,7 +413,7 @@ function HomeScreen({ profile }: { profile?: any }) {
         api.get('/api/pinned-content'),
       ]);
 
-      const allEvents = safeList(eventsRes.data);
+      const allEvents = eventsRes.status === 'fulfilled' ? safeList(eventsRes.value.data) : [];
       const publicEvents = allEvents.filter((event) => !isStaffOnlyEvent(event));
       const now = Date.now();
 
@@ -423,11 +423,15 @@ function HomeScreen({ profile }: { profile?: any }) {
         .sort((a, b) => a.ts - b.ts)
         .map((item) => item.event);
 
-      const presses = safeList(pressRes.data);
-      const pinned = pinnedRes.data?.data ?? null;
+      const presses = pressRes.status === 'fulfilled' ? safeList(pressRes.value.data) : [];
+      const pinned = pinnedRes.status === 'fulfilled' ? pinnedRes.value.data?.data ?? null : null;
+      const pinnedTitle = pinned ? pick(pinned, 'title') : null;
       setNextEvent(upcoming[0] ?? null);
       setTopPress(presses[0] ?? null);
-      setPinnedContent(pick(pinned, 'active') === false ? null : pinned);
+      setPinnedContent(pinnedTitle && pick(pinned, 'active') !== false ? pinned : null);
+
+      const requiredError = eventsRes.status === 'rejected' ? eventsRes.reason : null;
+      if (requiredError) throw requiredError;
     } catch (e: any) {
       setError(e?.response?.data?.error?.message || e.message);
     } finally {
