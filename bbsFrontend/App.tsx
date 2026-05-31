@@ -261,7 +261,7 @@ function SectionCard({
 }: {
   title: string;
   eyebrow?: string;
-  children: React.ReactNode;
+  children?: React.ReactNode;
 }) {
   return (
     <View
@@ -297,7 +297,7 @@ function SectionCard({
           color: COLORS.ink,
           fontSize: 20,
           fontWeight: '900',
-          marginBottom: 8,
+          marginBottom: children ? 8 : 0,
         }}
       >
         {title}
@@ -445,6 +445,11 @@ function HomeScreen({ profile }: { profile?: any }) {
   const pinnedBody = pinnedContent ? richTextToPlain(pick(pinnedContent, 'body')) : '';
   const pinnedButtonLabel = pinnedContent ? pick(pinnedContent, 'buttonLabel') : null;
   const pinnedButtonUrl = pinnedContent ? pick(pinnedContent, 'buttonUrl') : null;
+  const assignmentTitle = profile?.student
+    ? `${profile.student.city?.name || 'City not assigned'}${
+        profile.student.county?.name ? `, ${profile.student.county.name} County` : ''
+      }`
+    : '';
 
   return (
     <ScreenFrame>
@@ -461,19 +466,6 @@ function HomeScreen({ profile }: { profile?: any }) {
 
           {error ? (
             <Text style={{ marginBottom: 12, color: COLORS.red, fontWeight: '700' }}>{error}</Text>
-          ) : null}
-
-          {profile?.student ? (
-            <SectionCard title="My Assignment" eyebrow="Signed In">
-              <Text style={{ color: COLORS.text, fontSize: 18, fontWeight: '900' }}>
-                {profile.student.name || `Citizen ${profile.student.id_number}`}
-              </Text>
-              <Text style={{ marginTop: 8, color: COLORS.muted, lineHeight: 21 }}>
-                {profile.student.city?.name || 'City not assigned'}
-                {profile.student.county?.name ? `, ${profile.student.county.name} County` : ''}
-                {profile.student.party ? ` • ${profile.student.party}` : ''}
-              </Text>
-            </SectionCard>
           ) : null}
 
           {pinnedContent ? (
@@ -495,6 +487,8 @@ function HomeScreen({ profile }: { profile?: any }) {
               </>
             </SectionCard>
           ) : null}
+
+          {assignmentTitle ? <SectionCard title={assignmentTitle} /> : null}
 
           <SectionCard title="Next Schedule Item">
             {nextEvent ? (
