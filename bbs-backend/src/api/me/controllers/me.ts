@@ -44,6 +44,26 @@ async function findStudentForUser(user: any) {
 type ScheduleRow = Record<string, string>;
 
 const scheduleCache = new Map<string, { expiresAt: number; rows: ScheduleRow[] }>();
+const ACTIVITY_TABS = ['Extracurriculars', 'State Process'];
+const ACTIVITY_COLUMNS = [
+  'Band',
+  'Choir',
+  'Color Guard',
+  'Parks & Recreation Directors',
+  'Press Corps',
+  'School Board',
+  'State Assembly',
+  'State Senate',
+  'State Supreme Court',
+  'State Cabinet',
+  'State Federalist Party Delegates',
+  'State Nationalist Party Delegates',
+  'State Federalist Party Leadership',
+  'State Nationalist Party Leadership',
+];
+const LEVEL_ALIASES: Record<string, string[]> = {
+  'State Assembly': ['State Assembly', 'State Aseembly'],
+};
 
 function normalizeHeader(value: string) {
   return String(value || '')
@@ -119,11 +139,18 @@ function getScheduleSheetId() {
   return match?.[1] ?? null;
 }
 
-function googleSheetCsvUrl(sheetId: string, tabName: string) {
-  const params = new URLSearchParams({
-    tqx: 'out:csv',
-    sheet: tabName,
-  });
+function getStudentSheetId() {
+  const configuredId = process.env.STUDENT_GOOGLE_SHEET_ID;
+  if (configuredId) return configuredId.trim();
+
+  const configuredUrl = process.env.STUDENT_GOOGLE_SHEET_URL;
+  const match = configuredUrl?.match(/\/spreadsheets\/d\/([^/]+)/);
+  return match?.[1] ?? null;
+}
+
+function googleSheetCsvUrl(sheetId: string, tabName?: string) {
+  const params = new URLSearchParams({ tqx: 'out:csv' });
+  if (tabName) params.set('sheet', tabName);
 
   return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?${params.toString()}`;
 }
@@ -266,42 +293,79 @@ function scheduleUrlsForCounty(countyName: string) {
   return [...new Set(urls)];
 }
 
+function activityLevelsFromStudentRow(row: ScheduleRow) {
+  return ACTIVITY_COLUMNS.flatMap((column) => {
+    if (!booleanCell(getCell(row, [column]))) return [];
+    return LEVEL_ALIASES[column] ?? [column];
+  });
+}
+
+async function activityLevelsForStudent(student: any) {
+  const sheetId = getStudentSheetId();
+  const citizenId = String(student?.id_number ?? '');
+
+  if (!sheetId || !citizenId) return [];
+
+  const rows = await fetchScheduleRows(googleSheetCsvUrl(sheetId, process.env.STUDENT_GOOGLE_SHEET_TAB));
+  const row = rows.find((candidate) => getCell(candidate, ['File ID', 'citizenId', 'Citizen ID']) === citizenId);
+
+  return row ? activityLevelsFromStudentRow(row) : [];
+}
+
+function rowToScheduleEvent(row: ScheduleRow, index: number) {
+  const startsAt = parseScheduleDate(
+    row,
+    ['starts_at', 'start', 'start datetime', 'start date time'],
+    ['date', 'start date'],
+    ['start time']
+  );
+  const endsAt = parseScheduleDate(
+    row,
+    ['ends_at', 'end', 'end datetime', 'end date time'],
+    ['date', 'end date'],
+    ['end time']
+  );
+
+  return {
+    id: getCell(row, ['id', 'externalId', 'external id']) || `sheet-${index}`,
+    externalId: getCell(row, ['externalId', 'external id']) || null,
+    title: getCell(row, ['title', 'subject', 'event', 'activity', 'name']) || 'Untitled event',
+    starts_at: startsAt,
+    ends_at: endsAt,
+    location: getCell(row, ['location', 'place', 'room']),
+    description: getCell(row, ['description', 'details', 'notes']),
+  };
+}
+
 async function liveScheduleForStudent(student: any) {
   const countyName = student?.city?.county?.name;
+  const sheetId = getScheduleSheetId();
   const urls = countyName ? scheduleUrlsForCounty(countyName) : [];
 
   if (urls.length === 0) return null;
 
-  const rowGroups = await Promise.all(urls.map(fetchScheduleRows));
-  const rows = rowGroups.flat();
+  const [baseRowGroups, activityLevels] = await Promise.all([
+    Promise.all(urls.map(fetchScheduleRows)),
+    activityLevelsForStudent(student),
+  ]);
+  const baseRows = baseRowGroups.flat();
+  const activityRows =
+    sheetId && activityLevels.length > 0
+      ? (
+          await Promise.all(
+            ACTIVITY_TABS.map(async (tab) => {
+              const rows = await fetchScheduleRows(googleSheetCsvUrl(sheetId, tab));
+              return rows.filter((row) => activityLevels.includes(getCell(row, ['level'])));
+            })
+          )
+        ).flat()
+      : [];
+  const rows = [...baseRows, ...activityRows];
 
   return rows
     .filter((row) => !booleanCell(getCell(row, ['staffOnly', 'staff only', 'staff', 'private'])))
     .filter((row) => countyMatches(getCell(row, ['county', 'counties']), countyName))
-    .map((row, index) => {
-      const startsAt = parseScheduleDate(
-        row,
-        ['starts_at', 'start', 'start datetime', 'start date time'],
-        ['date', 'start date'],
-        ['start time']
-      );
-      const endsAt = parseScheduleDate(
-        row,
-        ['ends_at', 'end', 'end datetime', 'end date time'],
-        ['date', 'end date'],
-        ['end time']
-      );
-
-      return {
-        id: getCell(row, ['id', 'externalId', 'external id']) || `sheet-${index}`,
-        externalId: getCell(row, ['externalId', 'external id']) || null,
-        title: getCell(row, ['title', 'subject', 'event', 'activity', 'name']) || 'Untitled event',
-        starts_at: startsAt,
-        ends_at: endsAt,
-        location: getCell(row, ['location', 'place', 'room']),
-        description: getCell(row, ['description', 'details', 'notes']),
-      };
-    })
+    .map(rowToScheduleEvent)
     .filter((event) => event.starts_at)
     .sort((a, b) => Date.parse(a.starts_at || '') - Date.parse(b.starts_at || ''));
 }
