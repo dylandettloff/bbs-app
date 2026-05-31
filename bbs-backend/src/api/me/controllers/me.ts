@@ -41,6 +41,24 @@ async function findStudentForUser(user: any) {
   return students[0] ?? null;
 }
 
+async function getAuthenticatedUser(ctx: any) {
+  const tokenPayload: any = await strapi
+    .plugin('users-permissions')
+    .service('jwt')
+    .getToken(ctx);
+
+  if (!tokenPayload?.id) return null;
+
+  const user = await strapi.db.query('plugin::users-permissions.user').findOne({
+    where: {
+      id: tokenPayload.id,
+      blocked: false,
+    },
+  });
+
+  return user ?? null;
+}
+
 function eventMatchesStudent(event: any, student: any) {
   if (!student) return false;
   if (event?.staffOnly === true) return false;
@@ -63,7 +81,7 @@ function eventMatchesStudent(event: any, student: any) {
 
 export default {
   async profile(ctx: any) {
-    const user = ctx.state.user;
+    const user = await getAuthenticatedUser(ctx);
     if (!user) return ctx.unauthorized();
 
     const student = await findStudentForUser(user);
@@ -99,7 +117,7 @@ export default {
   },
 
   async schedule(ctx: any) {
-    const user = ctx.state.user;
+    const user = await getAuthenticatedUser(ctx);
     if (!user) return ctx.unauthorized();
 
     const student = await findStudentForUser(user);
