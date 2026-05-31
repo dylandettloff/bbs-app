@@ -20,7 +20,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
 const API_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_URL || 'http://localhost:1337';
 const Tab: any = createBottomTabNavigator();
-const BRAND_LOGO = require('./assets/badger_boys_state_inc_logo.jpeg');
+const BRAND_LOGO = require('./assets/badger_boys_state_logo_cropped.jpeg');
 const EAS_PROJECT_ID = 'c8aadf84-b565-4fed-b5c1-e6c752978910';
 
 Notifications.setNotificationHandler({
@@ -281,9 +281,9 @@ function BrandHeader() {
     <View
       style={{
         backgroundColor: COLORS.blue,
-        paddingHorizontal: 10,
+        paddingHorizontal: 4,
         paddingTop: 0,
-        paddingBottom: 2,
+        paddingBottom: 0,
         borderBottomLeftRadius: 26,
         borderBottomRightRadius: 26,
       }}
@@ -292,8 +292,8 @@ function BrandHeader() {
         source={BRAND_LOGO}
         style={{
           width: '100%',
-          maxWidth: 500,
-          height: 207,
+          maxWidth: 520,
+          height: 190,
           alignSelf: 'center',
         }}
         resizeMode="contain"
@@ -1083,8 +1083,8 @@ function LoginScreen({
           source={BRAND_LOGO}
           style={{
             width: '100%',
-            maxWidth: 500,
-            height: 207,
+            maxWidth: 520,
+            height: 190,
             alignSelf: 'center',
             marginBottom: 22,
           }}
