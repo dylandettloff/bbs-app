@@ -110,6 +110,24 @@ function booleanCell(value: string) {
   return ['true', 'yes', 'y', '1'].includes(String(value || '').trim().toLowerCase());
 }
 
+function getScheduleSheetId() {
+  const configuredId = process.env.SCHEDULE_GOOGLE_SHEET_ID;
+  if (configuredId) return configuredId.trim();
+
+  const configuredUrl = process.env.SCHEDULE_GOOGLE_SHEET_URL;
+  const match = configuredUrl?.match(/\/spreadsheets\/d\/([^/]+)/);
+  return match?.[1] ?? null;
+}
+
+function googleSheetCsvUrl(sheetId: string, tabName: string) {
+  const params = new URLSearchParams({
+    tqx: 'out:csv',
+    sheet: tabName,
+  });
+
+  return `https://docs.google.com/spreadsheets/d/${sheetId}/gviz/tq?${params.toString()}`;
+}
+
 function countyMatches(rowCounty: string, studentCounty: string) {
   const county = String(rowCounty || '').trim();
   if (!county) return true;
@@ -123,6 +141,62 @@ function countyMatches(rowCounty: string, studentCounty: string) {
     .includes(studentCounty.toLowerCase().replace(/\s+county$/, ''));
 }
 
+function parseDateParts(value: string) {
+  const trimmed = value.trim();
+  const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (slashMatch) {
+    const year = slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3];
+    return {
+      year: Number(year),
+      month: Number(slashMatch[1]),
+      day: Number(slashMatch[2]),
+    };
+  }
+
+  const dashMatch = trimmed.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+  if (dashMatch) {
+    return {
+      year: Number(dashMatch[1]),
+      month: Number(dashMatch[2]),
+      day: Number(dashMatch[3]),
+    };
+  }
+
+  return null;
+}
+
+function parseTimeParts(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return { hour: 0, minute: 0 };
+
+  const match = trimmed.match(/^(\d{1,2})(?::(\d{2}))?(?::\d{2})?\s*(AM|PM)?$/i);
+  if (!match) return null;
+
+  let hour = Number(match[1]);
+  const minute = Number(match[2] ?? 0);
+  const meridiem = match[3]?.toUpperCase();
+
+  if (meridiem === 'PM' && hour < 12) hour += 12;
+  if (meridiem === 'AM' && hour === 12) hour = 0;
+
+  return { hour, minute };
+}
+
+function buildProgramIso(dateValue: string, timeValue: string) {
+  const date = parseDateParts(dateValue);
+  const time = parseTimeParts(timeValue);
+  if (!date || !time) return null;
+
+  const offset = process.env.SCHEDULE_TIME_ZONE_OFFSET || '-05:00';
+  const yyyy = String(date.year).padStart(4, '0');
+  const mm = String(date.month).padStart(2, '0');
+  const dd = String(date.day).padStart(2, '0');
+  const hh = String(time.hour).padStart(2, '0');
+  const min = String(time.minute).padStart(2, '0');
+
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}:00${offset}`;
+}
+
 function parseScheduleDate(row: ScheduleRow, primaryAliases: string[], dateAliases: string[], timeAliases: string[]) {
   const directValue = getCell(row, primaryAliases);
   if (directValue) {
@@ -133,6 +207,9 @@ function parseScheduleDate(row: ScheduleRow, primaryAliases: string[], dateAlias
   const dateValue = getCell(row, dateAliases);
   const timeValue = getCell(row, timeAliases);
   if (!dateValue) return null;
+
+  const programIso = buildProgramIso(dateValue, timeValue);
+  if (programIso) return programIso;
 
   const parsed = new Date(timeValue ? `${dateValue} ${timeValue}` : dateValue);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
@@ -163,7 +240,13 @@ async function fetchScheduleRows(url: string) {
 
 function scheduleUrlsForCounty(countyName: string) {
   const urls: string[] = [];
+  const sheetId = getScheduleSheetId();
   const singleUrl = process.env.SCHEDULE_SHEET_CSV_URL;
+
+  if (sheetId) {
+    urls.push(googleSheetCsvUrl(sheetId, 'BBS'));
+    urls.push(googleSheetCsvUrl(sheetId, countyName));
+  }
 
   if (singleUrl) urls.push(singleUrl);
 
@@ -193,7 +276,7 @@ async function liveScheduleForStudent(student: any) {
   const rows = rowGroups.flat();
 
   return rows
-    .filter((row) => !booleanCell(getCell(row, ['staffOnly', 'staff only', 'staff'])))
+    .filter((row) => !booleanCell(getCell(row, ['staffOnly', 'staff only', 'staff', 'private'])))
     .filter((row) => countyMatches(getCell(row, ['county', 'counties']), countyName))
     .map((row, index) => {
       const startsAt = parseScheduleDate(
@@ -212,7 +295,7 @@ async function liveScheduleForStudent(student: any) {
       return {
         id: getCell(row, ['id', 'externalId', 'external id']) || `sheet-${index}`,
         externalId: getCell(row, ['externalId', 'external id']) || null,
-        title: getCell(row, ['title', 'event', 'activity', 'name']) || 'Untitled event',
+        title: getCell(row, ['title', 'subject', 'event', 'activity', 'name']) || 'Untitled event',
         starts_at: startsAt,
         ends_at: endsAt,
         location: getCell(row, ['location', 'place', 'room']),
