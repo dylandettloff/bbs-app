@@ -348,7 +348,7 @@ function StoryCard({
           letterSpacing: 0.3,
         }}
       >
-        {open ? 'Close story ↑' : 'Read story ↓'}
+        {open ? 'Close info ↑' : 'See more info ↓'}
       </Text>
 
       {open ? (
