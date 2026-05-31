@@ -292,8 +292,8 @@ function BrandHeader() {
         source={BRAND_LOGO}
         style={{
           width: '100%',
-          maxWidth: 520,
-          height: 190,
+          maxWidth: 500,
+          height: 172,
           alignSelf: 'center',
         }}
         resizeMode="contain"
@@ -1083,8 +1083,8 @@ function LoginScreen({
           source={BRAND_LOGO}
           style={{
             width: '100%',
-            maxWidth: 520,
-            height: 190,
+            maxWidth: 500,
+            height: 172,
             alignSelf: 'center',
             marginBottom: 22,
           }}
@@ -1269,13 +1269,6 @@ export default function App() {
     }
   };
 
-  const signOut = () => {
-    applyJwt(null);
-    setJwt(null);
-    setProfile(null);
-    setAuthError(null);
-  };
-
   if (!jwt) {
     return (
       <LoginScreen
@@ -1318,27 +1311,6 @@ export default function App() {
         <Tab.Screen name="Schedule" component={ScheduleScreen} />
         <Tab.Screen name="Press" component={PressScreen} />
         <Tab.Screen name="Files" component={FilesScreen} />
-        <Tab.Screen name="Sign Out">
-          {() => (
-            <ScreenFrame>
-              <View style={{ padding: 16 }}>
-                <SectionCard title="Signed In" eyebrow="Account">
-                  <Text style={{ color: COLORS.text, lineHeight: 22 }}>
-                    {profile?.student?.name || `Citizen ${profile?.student?.id_number || ''}`}
-                  </Text>
-                  <Text style={{ marginTop: 6, color: COLORS.muted, lineHeight: 20 }}>
-                    {profile?.student?.city?.name || 'City not assigned'}
-                    {profile?.student?.county?.name ? `, ${profile.student.county.name} County` : ''}
-                    {profile?.student?.party ? ` • ${profile.student.party}` : ''}
-                  </Text>
-                  <View style={{ marginTop: 16 }}>
-                    <ActionButton label="Sign out" onPress={signOut} />
-                  </View>
-                </SectionCard>
-              </View>
-            </ScreenFrame>
-          )}
-        </Tab.Screen>
       </Tab.Navigator>
     </NavigationContainer>
   );
