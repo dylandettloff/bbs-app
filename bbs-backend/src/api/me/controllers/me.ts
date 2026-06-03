@@ -45,22 +45,31 @@ type ScheduleRow = Record<string, string>;
 
 const scheduleCache = new Map<string, { expiresAt: number; rows: ScheduleRow[] }>();
 const ACTIVITY_TABS = ['Extracurriculars', 'State Process'];
-const ACTIVITY_COLUMNS = [
-  'Band',
-  'Choir',
-  'Color Guard',
-  'Parks & Recreation Directors',
-  'Press Corps',
-  'School Board',
-  'State Assembly',
-  'State Senate',
-  'State Supreme Court',
-  'State Cabinet',
-  'State Federalist Party Delegates',
-  'State Nationalist Party Delegates',
-  'State Federalist Party Leadership',
-  'State Nationalist Party Leadership',
-];
+const STUDENT_PROFILE_COLUMNS = new Set(
+  [
+    'File ID',
+    'Citizen ID',
+    'Citizen',
+    'City',
+    'County',
+    'Party',
+    'Email',
+    'Password',
+    'First',
+    'Last',
+    'High School',
+    'Date of Birth',
+    'Remove',
+    'Tower',
+    'Floor',
+    'Room',
+    'Letter',
+    'UWEC Room',
+    'Lanyard Room',
+    'Search Room',
+    'Offline',
+  ].map(normalizeHeader)
+);
 const LEVEL_ALIASES: Record<string, string[]> = {
   'State Assembly': ['State Assembly', 'State Aseembly'],
 };
@@ -106,12 +115,16 @@ function parseCsv(text: string): ScheduleRow[] {
 
   if (lines.length < 2) return [];
 
-  const headers = parseCsvLine(lines[0]).map(normalizeHeader);
+  const rawHeaders = parseCsvLine(lines[0]);
+  const headers = rawHeaders.map(normalizeHeader);
 
   return lines.slice(1).map((line) => {
     const values = parseCsvLine(line);
     return headers.reduce((row, header, index) => {
-      if (header) row[header] = values[index] ?? '';
+      if (header) {
+        row[header] = values[index] ?? '';
+        row[`__header_${header}`] = rawHeaders[index] ?? header;
+      }
       return row;
     }, {} as ScheduleRow);
   });
@@ -294,10 +307,42 @@ function scheduleUrlsForCounty(countyName: string) {
 }
 
 function activityLevelsFromStudentRow(row: ScheduleRow) {
-  return ACTIVITY_COLUMNS.flatMap((column) => {
-    if (!booleanCell(getCell(row, [column]))) return [];
-    return LEVEL_ALIASES[column] ?? [column];
+  const party = getCell(row, ['Party']).toLowerCase();
+  const levels = new Set<string>();
+
+  Object.entries(row).forEach(([key, value]) => {
+    if (key.startsWith('__header_') || STUDENT_PROFILE_COLUMNS.has(key) || !booleanCell(value)) return;
+
+    const header = row[`__header_${key}`] || key;
+    const mappedLevels = LEVEL_ALIASES[header] ?? [header];
+
+    mappedLevels.forEach((level) => levels.add(level));
+
+    if (header === 'State Legislature') {
+      levels.add('State Assembly');
+      levels.add('State Aseembly');
+      levels.add('State Senate');
+    }
+
+    if (['Party Delegate', 'Boys Nation', 'Boys Nation Finalist', 'Boys Nation Alternate', 'Boys Nation Selection'].includes(header)) {
+      if (party === 'federalist') levels.add('State Federalist Party Delegates');
+      if (party === 'nationalist') levels.add('State Nationalist Party Delegates');
+    }
+
+    if (
+      [
+        'Party Leadership',
+        'Party Chair',
+        'Party Secretary',
+        'Party Campaign Manager',
+      ].includes(header)
+    ) {
+      if (party === 'federalist') levels.add('State Federalist Party Leadership');
+      if (party === 'nationalist') levels.add('State Nationalist Party Leadership');
+    }
   });
+
+  return [...levels];
 }
 
 async function activityLevelsForStudent(student: any) {
