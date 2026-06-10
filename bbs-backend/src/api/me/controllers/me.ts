@@ -389,18 +389,28 @@ async function liveScheduleForStudent(student: any) {
 
   if (urls.length === 0) return null;
 
-  const [baseRowGroups, activityLevels] = await Promise.all([
-    Promise.all(urls.map(fetchScheduleRows)),
-    activityLevelsForStudent(student),
-  ]);
+  const baseRowGroups = await Promise.all(urls.map(fetchScheduleRows));
   const baseRows = baseRowGroups.flat();
+
+  let activityLevels: string[] = [];
+  try {
+    activityLevels = await activityLevelsForStudent(student);
+  } catch (error) {
+    strapi.log.warn(`[schedule] Student activity sheet failed: ${String(error)}`);
+  }
+
   const activityRows =
     sheetId && activityLevels.length > 0
       ? (
           await Promise.all(
             ACTIVITY_TABS.map(async (tab) => {
-              const rows = await fetchScheduleRows(googleSheetCsvUrl(sheetId, tab));
-              return rows.filter((row) => activityLevels.includes(getCell(row, ['level'])));
+              try {
+                const rows = await fetchScheduleRows(googleSheetCsvUrl(sheetId, tab));
+                return rows.filter((row) => activityLevels.includes(getCell(row, ['level'])));
+              } catch (error) {
+                strapi.log.warn(`[schedule] Activity tab ${tab} failed: ${String(error)}`);
+                return [];
+              }
             })
           )
         ).flat()
