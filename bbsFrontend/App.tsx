@@ -16,7 +16,7 @@ import axios from 'axios';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
-const API_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_URL || 'http://localhost:1337';
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://bbs-backend-713848127304.us-central1.run.app';
 const Tab: any = createBottomTabNavigator();
 const BRAND_LOGO = require('./assets/bbs_logo_white_cutout_cropped.png');
 const EAS_PROJECT_ID = 'c8aadf84-b565-4fed-b5c1-e6c752978910';
