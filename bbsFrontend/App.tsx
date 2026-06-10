@@ -13,8 +13,6 @@ import {
   View,
 } from 'react-native';
 import axios from 'axios';
-import * as Device from 'expo-device';
-import * as Notifications from 'expo-notifications';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 
@@ -22,15 +20,6 @@ const API_URL = (globalThis as any)?.process?.env?.EXPO_PUBLIC_API_URL || 'http:
 const Tab: any = createBottomTabNavigator();
 const BRAND_LOGO = require('./assets/bbs_logo_white_cutout_cropped.png');
 const EAS_PROJECT_ID = 'c8aadf84-b565-4fed-b5c1-e6c752978910';
-
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldPlaySound: true,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
 
 const COLORS = {
   ink: '#12345C',
@@ -53,6 +42,20 @@ const api = axios.create({
 
 async function registerForPushNotifications() {
   try {
+    const [Device, Notifications] = await Promise.all([
+      import('expo-device'),
+      import('expo-notifications'),
+    ]);
+
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldPlaySound: true,
+        shouldSetBadge: false,
+        shouldShowBanner: true,
+        shouldShowList: true,
+      }),
+    });
+
     if (!Device.isDevice) return;
 
     if (Platform.OS === 'android') {

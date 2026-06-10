@@ -8,7 +8,7 @@
     "orientation": "default",
     "ios": {
       "bundleIdentifier": "org.badgerboysstate.app",
-      "jsEngine": "jsc"
+      "jsEngine": "hermes"
     },
     "android": {
       "package": "org.badgerboysstate.app"
