@@ -42,6 +42,10 @@ async function findStudentForUser(user: any) {
 }
 
 type ScheduleRow = Record<string, string>;
+type ScheduleRowGroup = {
+  tabName: string;
+  rows: ScheduleRow[];
+};
 
 const scheduleCache = new Map<string, { expiresAt: number; rows: ScheduleRow[] }>();
 const ACTIVITY_TABS = ['Extracurriculars', 'State Process'];
@@ -181,6 +185,10 @@ function countyMatches(rowCounty: string, studentCounty: string) {
     .includes(studentCounty.toLowerCase().replace(/\s+county$/, ''));
 }
 
+function normalizedLevel(value: string | null | undefined) {
+  return normalizeHeader(String(value || '').replace(/\bcounty\b/gi, ''));
+}
+
 function parseDateParts(value: string) {
   const trimmed = value.trim();
   const slashMatch = trimmed.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
@@ -278,17 +286,17 @@ async function fetchScheduleRows(url: string) {
   return rows;
 }
 
-function scheduleUrlsForCounty(countyName: string) {
-  const urls: string[] = [];
+function scheduleTabsForCounty(countyName: string) {
+  const tabs: { tabName: string; url: string }[] = [];
   const sheetId = getScheduleSheetId();
   const singleUrl = process.env.SCHEDULE_SHEET_CSV_URL;
 
   if (sheetId) {
-    urls.push(googleSheetCsvUrl(sheetId, 'BBS'));
-    urls.push(googleSheetCsvUrl(sheetId, countyName));
+    tabs.push({ tabName: 'BBS', url: googleSheetCsvUrl(sheetId, 'BBS') });
+    tabs.push({ tabName: countyName, url: googleSheetCsvUrl(sheetId, countyName) });
   }
 
-  if (singleUrl) urls.push(singleUrl);
+  if (singleUrl) tabs.push({ tabName: countyName, url: singleUrl });
 
   if (process.env.SCHEDULE_SHEET_CSV_URLS) {
     try {
@@ -296,14 +304,16 @@ function scheduleUrlsForCounty(countyName: string) {
       const countyUrl = byCounty[countyName] || byCounty[countyName.toLowerCase()];
       const allUrl = byCounty.all || byCounty._all;
 
-      if (allUrl) urls.push(allUrl);
-      if (countyUrl) urls.push(countyUrl);
+      if (allUrl) tabs.push({ tabName: 'BBS', url: allUrl });
+      if (countyUrl) tabs.push({ tabName: countyName, url: countyUrl });
     } catch (error) {
       strapi.log.warn(`[schedule] SCHEDULE_SHEET_CSV_URLS is not valid JSON: ${String(error)}`);
     }
   }
 
-  return [...new Set(urls)];
+  return tabs.filter(
+    (tab, index, allTabs) => allTabs.findIndex((candidate) => candidate.url === tab.url) === index
+  );
 }
 
 function activityLevelsFromStudentRow(row: ScheduleRow) {
@@ -382,15 +392,46 @@ function rowToScheduleEvent(row: ScheduleRow, index: number) {
   };
 }
 
+function baseScheduleRowsForStudent(groups: ScheduleRowGroup[], student: any) {
+  const cityName = student?.city?.name;
+  const countyName = student?.city?.county?.name;
+  const cityLevel = normalizedLevel(cityName);
+  const countyLevel = normalizedLevel(countyName);
+
+  return groups.flatMap((group) => {
+    const tabLevel = normalizedLevel(group.tabName);
+
+    return group.rows.filter((row) => {
+      const level = normalizedLevel(getCell(row, ['level']));
+
+      if (tabLevel === 'bbs') {
+        return !level || ['bbs', 'all', 'allstudents', 'everyone'].includes(level);
+      }
+
+      return !level || level === countyLevel || level === cityLevel;
+    });
+  });
+}
+
+function activityRowMatchesLevel(row: ScheduleRow, levels: Set<string>) {
+  const level = normalizedLevel(getCell(row, ['level']));
+  return Boolean(level && levels.has(level));
+}
+
 async function liveScheduleForStudent(student: any) {
   const countyName = student?.city?.county?.name;
   const sheetId = getScheduleSheetId();
-  const urls = countyName ? scheduleUrlsForCounty(countyName) : [];
+  const tabs = countyName ? scheduleTabsForCounty(countyName) : [];
 
-  if (urls.length === 0) return null;
+  if (tabs.length === 0) return null;
 
-  const baseRowGroups = await Promise.all(urls.map(fetchScheduleRows));
-  const baseRows = baseRowGroups.flat();
+  const baseRowGroups = await Promise.all(
+    tabs.map(async (tab) => ({
+      tabName: tab.tabName,
+      rows: await fetchScheduleRows(tab.url),
+    }))
+  );
+  const baseRows = baseScheduleRowsForStudent(baseRowGroups, student);
 
   let activityLevels: string[] = [];
   try {
@@ -399,14 +440,16 @@ async function liveScheduleForStudent(student: any) {
     strapi.log.warn(`[schedule] Student activity sheet failed: ${String(error)}`);
   }
 
+  const normalizedActivityLevels = new Set(activityLevels.map(normalizedLevel).filter(Boolean));
+
   const activityRows =
-    sheetId && activityLevels.length > 0
+    sheetId && normalizedActivityLevels.size > 0
       ? (
           await Promise.all(
             ACTIVITY_TABS.map(async (tab) => {
               try {
                 const rows = await fetchScheduleRows(googleSheetCsvUrl(sheetId, tab));
-                return rows.filter((row) => activityLevels.includes(getCell(row, ['level'])));
+                return rows.filter((row) => activityRowMatchesLevel(row, normalizedActivityLevels));
               } catch (error) {
                 strapi.log.warn(`[schedule] Activity tab ${tab} failed: ${String(error)}`);
                 return [];
