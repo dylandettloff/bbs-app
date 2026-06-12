@@ -61,9 +61,13 @@ const STUDENT_PROFILE_COLUMNS = new Set(
     'Password',
     'First',
     'Last',
+    'Printed First',
+    'Printed Last',
+    'Door Dec Name',
     'High School',
     'Date of Birth',
     'Remove',
+    'Lock',
     'Tower',
     'Floor',
     'Room',
@@ -72,10 +76,19 @@ const STUDENT_PROFILE_COLUMNS = new Set(
     'Lanyard Room',
     'Search Room',
     'Offline',
+    'Citizen',
+    'Special Note',
   ].map(normalizeHeader)
 );
 const LEVEL_ALIASES: Record<string, string[]> = {
   'State Assembly': ['State Assembly', 'State Aseembly'],
+  'Governor': ['State Cabinet'],
+  'Lt. Governor': ['State Cabinet'],
+  'Sec. of State': ['State Cabinet'],
+  'State Treasurer': ['State Cabinet'],
+  'Superintendent': ['State Cabinet'],
+  'Attorney General': ['State Cabinet'],
+  'Chief Justice': ['State Supreme Court'],
 };
 
 function normalizeHeader(value: string) {
@@ -335,6 +348,7 @@ function activityLevelsFromStudentRow(row: ScheduleRow) {
     }
 
     if (['Party Delegate', 'Boys Nation', 'Boys Nation Finalist', 'Boys Nation Alternate', 'Boys Nation Selection'].includes(header)) {
+      levels.add('State Delegates');
       if (party === 'federalist') levels.add('State Federalist Party Delegates');
       if (party === 'nationalist') levels.add('State Nationalist Party Delegates');
     }
@@ -347,6 +361,7 @@ function activityLevelsFromStudentRow(row: ScheduleRow) {
         'Party Campaign Manager',
       ].includes(header)
     ) {
+      levels.add('State Party Leadership');
       if (party === 'federalist') levels.add('State Federalist Party Leadership');
       if (party === 'nationalist') levels.add('State Nationalist Party Leadership');
     }
@@ -392,7 +407,7 @@ function rowToScheduleEvent(row: ScheduleRow, index: number) {
   };
 }
 
-function baseScheduleRowsForStudent(groups: ScheduleRowGroup[], student: any) {
+function baseScheduleRowsForStudent(groups: ScheduleRowGroup[], student: any, allowedLevels: Set<string>) {
   const cityName = student?.city?.name;
   const countyName = student?.city?.county?.name;
   const cityLevel = normalizedLevel(cityName);
@@ -405,10 +420,10 @@ function baseScheduleRowsForStudent(groups: ScheduleRowGroup[], student: any) {
       const level = normalizedLevel(getCell(row, ['level']));
 
       if (tabLevel === 'bbs') {
-        return !level || ['bbs', 'all', 'allstudents', 'everyone'].includes(level);
+        return !level || ['bbs', 'all', 'allstudents', 'everyone'].includes(level) || allowedLevels.has(level);
       }
 
-      return !level || level === countyLevel || level === cityLevel;
+      return !level || level === countyLevel || level === cityLevel || allowedLevels.has(level);
     });
   });
 }
@@ -425,14 +440,6 @@ async function liveScheduleForStudent(student: any) {
 
   if (tabs.length === 0) return null;
 
-  const baseRowGroups = await Promise.all(
-    tabs.map(async (tab) => ({
-      tabName: tab.tabName,
-      rows: await fetchScheduleRows(tab.url),
-    }))
-  );
-  const baseRows = baseScheduleRowsForStudent(baseRowGroups, student);
-
   let activityLevels: string[] = [];
   try {
     activityLevels = await activityLevelsForStudent(student);
@@ -441,6 +448,13 @@ async function liveScheduleForStudent(student: any) {
   }
 
   const normalizedActivityLevels = new Set(activityLevels.map(normalizedLevel).filter(Boolean));
+  const baseRowGroups = await Promise.all(
+    tabs.map(async (tab) => ({
+      tabName: tab.tabName,
+      rows: await fetchScheduleRows(tab.url),
+    }))
+  );
+  const baseRows = baseScheduleRowsForStudent(baseRowGroups, student, normalizedActivityLevels);
 
   const activityRows =
     sheetId && normalizedActivityLevels.size > 0
