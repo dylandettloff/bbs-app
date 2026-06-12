@@ -46,6 +46,10 @@ type ScheduleRowGroup = {
   tabName: string;
   rows: ScheduleRow[];
 };
+type StudentScheduleAccess = {
+  levels: string[];
+  party: string | null;
+};
 
 const scheduleCache = new Map<string, { expiresAt: number; rows: ScheduleRow[] }>();
 const ACTIVITY_TABS = ['Extracurriculars', 'State Process'];
@@ -158,6 +162,17 @@ function getCell(row: ScheduleRow, aliases: string[]) {
 
 function booleanCell(value: string) {
   return ['true', 'yes', 'y', '1'].includes(String(value || '').trim().toLowerCase());
+}
+
+function normalizeParty(value: unknown) {
+  const party = String(value || '').trim().toLowerCase();
+  if (party === 'federalist') return 'federalist';
+  if (party === 'nationalist') return 'nationalist';
+  if (party === 'independent' || party === 'nonpartisan' || party === 'non-partisan') {
+    return 'nonpartisan';
+  }
+
+  return null;
 }
 
 function getScheduleSheetId() {
@@ -370,16 +385,25 @@ function activityLevelsFromStudentRow(row: ScheduleRow) {
   return [...levels];
 }
 
-async function activityLevelsForStudent(student: any) {
+async function scheduleAccessForStudent(student: any): Promise<StudentScheduleAccess> {
   const sheetId = getStudentSheetId();
   const citizenId = String(student?.id_number ?? '');
+  const fallback = {
+    levels: [] as string[],
+    party: normalizeParty(student?.party),
+  };
 
-  if (!sheetId || !citizenId) return [];
+  if (!sheetId || !citizenId) return fallback;
 
   const rows = await fetchScheduleRows(googleSheetCsvUrl(sheetId, process.env.STUDENT_GOOGLE_SHEET_TAB));
   const row = rows.find((candidate) => getCell(candidate, ['File ID', 'citizenId', 'Citizen ID']) === citizenId);
 
-  return row ? activityLevelsFromStudentRow(row) : [];
+  return row
+    ? {
+        levels: activityLevelsFromStudentRow(row),
+        party: normalizeParty(getCell(row, ['Party'])) ?? fallback.party,
+      }
+    : fallback;
 }
 
 function rowToScheduleEvent(row: ScheduleRow, index: number) {
@@ -433,6 +457,26 @@ function activityRowMatchesLevel(row: ScheduleRow, levels: Set<string>) {
   return Boolean(level && levels.has(level));
 }
 
+function rowMatchesParty(row: ScheduleRow, party: string | null) {
+  if (!party || party === 'nonpartisan') return true;
+
+  const haystack = [
+    getCell(row, ['level']),
+    getCell(row, ['title', 'subject', 'event', 'activity', 'name']),
+    getCell(row, ['description', 'details', 'notes']),
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  const isFederalist = /\bfed(?:eralist)?\b/.test(haystack) || haystack.includes('federalist');
+  const isNationalist = /\bnat(?:ionalist)?\b/.test(haystack) || haystack.includes('nationalist');
+
+  if (party === 'federalist' && isNationalist && !isFederalist) return false;
+  if (party === 'nationalist' && isFederalist && !isNationalist) return false;
+
+  return true;
+}
+
 async function liveScheduleForStudent(student: any) {
   const countyName = student?.city?.county?.name;
   const sheetId = getScheduleSheetId();
@@ -440,14 +484,17 @@ async function liveScheduleForStudent(student: any) {
 
   if (tabs.length === 0) return null;
 
-  let activityLevels: string[] = [];
+  let scheduleAccess: StudentScheduleAccess = {
+    levels: [],
+    party: normalizeParty(student?.party),
+  };
   try {
-    activityLevels = await activityLevelsForStudent(student);
+    scheduleAccess = await scheduleAccessForStudent(student);
   } catch (error) {
     strapi.log.warn(`[schedule] Student activity sheet failed: ${String(error)}`);
   }
 
-  const normalizedActivityLevels = new Set(activityLevels.map(normalizedLevel).filter(Boolean));
+  const normalizedActivityLevels = new Set(scheduleAccess.levels.map(normalizedLevel).filter(Boolean));
   const baseRowGroups = await Promise.all(
     tabs.map(async (tab) => ({
       tabName: tab.tabName,
@@ -477,6 +524,7 @@ async function liveScheduleForStudent(student: any) {
   return rows
     .filter((row) => !booleanCell(getCell(row, ['staffOnly', 'staff only', 'staff', 'private'])))
     .filter((row) => countyMatches(getCell(row, ['county', 'counties']), countyName))
+    .filter((row) => rowMatchesParty(row, scheduleAccess.party))
     .map(rowToScheduleEvent)
     .filter((event) => event.starts_at)
     .sort((a, b) => Date.parse(a.starts_at || '') - Date.parse(b.starts_at || ''));
