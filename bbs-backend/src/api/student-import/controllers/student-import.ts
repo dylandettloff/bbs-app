@@ -21,6 +21,15 @@ function normalizeParty(value: unknown) {
   return null;
 }
 
+function normalizeLevels(value: unknown) {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((level) => cleanText(level))
+    .filter(Boolean)
+    .filter((level, index, levels) => levels.indexOf(level) === index);
+}
+
 async function findOne(uid: string, filters: any, populate?: any) {
   const results: any = await strapi.entityService.findMany(uid as any, {
     filters,
@@ -93,7 +102,13 @@ async function ensureUser(account: any, role: any) {
   return strapi.plugin('users-permissions').service('user').add(data);
 }
 
-async function ensureStudent(citizenId: number, city: any, user: any, party: string | null) {
+async function ensureStudent(
+  citizenId: number,
+  city: any,
+  user: any,
+  party: string | null,
+  scheduleLevels: string[]
+) {
   const existing = await findOne('api::student.student', {
     id_number: {
       $eq: citizenId,
@@ -104,6 +119,7 @@ async function ensureStudent(citizenId: number, city: any, user: any, party: str
     id_number: citizenId,
     name: null,
     party,
+    scheduleLevels,
     city: city.id,
     user: user.id,
     publishedAt: new Date(),
@@ -156,6 +172,7 @@ export default {
       const cityName = cleanText(account.city);
       const countyName = cleanText(account.county);
       const party = normalizeParty(account.party);
+      const scheduleLevels = normalizeLevels(account.levels);
 
       try {
         if (!citizenId || !email || !password || !cityName || !countyName) {
@@ -165,7 +182,7 @@ export default {
         const county = await ensureCounty(countyName);
         const city = await ensureCity(cityName, county);
         const user = await ensureUser({ citizenId, email, password }, role);
-        await ensureStudent(citizenId, city, user, party);
+        await ensureStudent(citizenId, city, user, party, scheduleLevels);
 
         summary.imported += 1;
       } catch (error: any) {

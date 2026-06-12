@@ -389,7 +389,7 @@ async function scheduleAccessForStudent(student: any): Promise<StudentScheduleAc
   const sheetId = getStudentSheetId();
   const citizenId = String(student?.id_number ?? '');
   const fallback = {
-    levels: [] as string[],
+    levels: Array.isArray(student?.scheduleLevels) ? student.scheduleLevels : [],
     party: normalizeParty(student?.party),
   };
 
