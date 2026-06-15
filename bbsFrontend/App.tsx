@@ -1046,7 +1046,7 @@ function FilesScreen() {
               ) : null}
               <View style={{ marginTop: description ? 14 : 4 }}>
                 <ActionButton
-                  label="Open PDF"
+                  label="Open"
                   onPress={() => {
                     if (url) Linking.openURL(url);
                   }}
