@@ -4,7 +4,7 @@
   "expo": {
     "name": "Badger Boys State",
     "slug": "badger-boys-state",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "default",
     "ios": {
       "bundleIdentifier": "org.badgerboysstate.app",

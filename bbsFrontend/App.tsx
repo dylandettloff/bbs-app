@@ -189,6 +189,143 @@ function richTextToPlain(input: any): string {
   return texts.join(' ').replace(/\s+/g, ' ').trim();
 }
 
+function renderInlineRichText(children: any[] = [], keyPrefix = 'inline'): React.ReactNode {
+  return children.map((child, index) => {
+    const key = `${keyPrefix}-${index}`;
+
+    if (typeof child?.text === 'string') {
+      const style: any = {};
+      if (child.bold) style.fontWeight = '900';
+      if (child.italic) style.fontStyle = 'italic';
+      if (child.underline) style.textDecorationLine = 'underline';
+      if (child.strikethrough) style.textDecorationLine = 'line-through';
+      if (child.code) {
+        style.fontFamily = Platform.select({ ios: 'Menlo', android: 'monospace', default: 'monospace' });
+        style.backgroundColor = COLORS.cream;
+      }
+
+      return (
+        <Text key={key} style={style}>
+          {child.text}
+        </Text>
+      );
+    }
+
+    if (child?.type === 'link') {
+      return (
+        <Text
+          key={key}
+          style={{ color: COLORS.blue, fontWeight: '800', textDecorationLine: 'underline' }}
+          onPress={() => child.url && Linking.openURL(String(child.url))}
+        >
+          {renderInlineRichText(child.children, key)}
+        </Text>
+      );
+    }
+
+    return renderInlineRichText(child?.children || [], key);
+  });
+}
+
+function RichTextBody({ value }: { value: any }) {
+  if (!value) return null;
+
+  if (typeof value === 'string') {
+    const body = stripHtml(value);
+    if (!body) return null;
+    return (
+      <Text style={{ marginTop: 12, color: COLORS.text, lineHeight: 24, fontSize: 16 }}>
+        {body}
+      </Text>
+    );
+  }
+
+  const blocks = Array.isArray(value) ? value : [];
+  if (blocks.length === 0) return null;
+
+  return (
+    <View style={{ marginTop: 12 }}>
+      {blocks.map((block, index) => {
+        const key = `block-${index}`;
+        const children = renderInlineRichText(block?.children || [], key);
+
+        if (block?.type === 'heading') {
+          const level = Number(block.level || 2);
+          const fontSize = level <= 1 ? 24 : level === 2 ? 21 : 18;
+          return (
+            <Text
+              key={key}
+              style={{
+                color: COLORS.ink,
+                fontSize,
+                lineHeight: fontSize + 7,
+                fontWeight: '900',
+                marginTop: index === 0 ? 0 : 14,
+              }}
+            >
+              {children}
+            </Text>
+          );
+        }
+
+        if (block?.type === 'quote') {
+          return (
+            <View
+              key={key}
+              style={{
+                borderLeftWidth: 3,
+                borderLeftColor: COLORS.blue,
+                paddingLeft: 12,
+                marginTop: index === 0 ? 0 : 12,
+              }}
+            >
+              <Text style={{ color: COLORS.muted, lineHeight: 24, fontSize: 16, fontStyle: 'italic' }}>
+                {children}
+              </Text>
+            </View>
+          );
+        }
+
+        if (block?.type === 'list') {
+          const ordered = block.format === 'ordered';
+          const items = Array.isArray(block.children) ? block.children : [];
+          return (
+            <View key={key} style={{ marginTop: index === 0 ? 0 : 10 }}>
+              {items.map((item: any, itemIndex: number) => (
+                <View
+                  key={`${key}-item-${itemIndex}`}
+                  style={{ flexDirection: 'row', alignItems: 'flex-start', marginTop: itemIndex === 0 ? 0 : 6 }}
+                >
+                  <Text style={{ color: COLORS.text, lineHeight: 24, fontSize: 16, width: 28 }}>
+                    {ordered ? `${itemIndex + 1}.` : '-'}
+                  </Text>
+                  <Text style={{ flex: 1, color: COLORS.text, lineHeight: 24, fontSize: 16 }}>
+                    {renderInlineRichText(item?.children || [], `${key}-item-${itemIndex}`)}
+                  </Text>
+                </View>
+              ))}
+            </View>
+          );
+        }
+
+        return (
+          <Text
+            key={key}
+            style={{
+              color: COLORS.text,
+              lineHeight: 24,
+              fontSize: 16,
+              marginTop: index === 0 ? 0 : 10,
+            }}
+          >
+            {children}
+          </Text>
+        );
+      })}
+    </View>
+  );
+}
+
 function absUrl(maybeRelative?: string | null) {
   if (!maybeRelative) return null;
   const value = String(maybeRelative);
@@ -864,8 +1001,9 @@ function PressScreen() {
           const id = String(story?.id);
           const isOpen = expandedId === id;
           const imageUrl = getPressImageUrls(story)[0] ?? null;
-          const body = richTextToPlain(pick(story, 'body'));
-          const preview = body.length > 180 ? `${body.slice(0, 180).trim()}...` : body;
+          const bodyValue = pick(story, 'body');
+          const bodyPreview = richTextToPlain(bodyValue);
+          const preview = bodyPreview.length > 180 ? `${bodyPreview.slice(0, 180).trim()}...` : bodyPreview;
 
           return (
             <Pressable
@@ -938,18 +1076,7 @@ function PressScreen() {
               </Text>
               {isOpen ? (
                 <>
-                  {body ? (
-                    <Text
-                      style={{
-                        marginTop: 12,
-                        color: COLORS.text,
-                        lineHeight: 24,
-                        fontSize: 16,
-                      }}
-                    >
-                      {body}
-                    </Text>
-                  ) : null}
+                  <RichTextBody value={bodyValue} />
                   {pick(story, 'sourceUrl') ? (
                     <Pressable
                       onPress={() => Linking.openURL(String(pick(story, 'sourceUrl')))}
